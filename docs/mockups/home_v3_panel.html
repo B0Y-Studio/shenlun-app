@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>方案 V3 · 改3 — 主菜单</title>
+<style>
+  :root{
+    --bg:#F0EAD6;--bg-alt:#E8DFC4;--paper:#FFFBF0;
+    --ink:#1C1714;--ink-soft:#3D332B;--ink-muted:#8B7355;--ink-faint:#B8A88A;
+    --brass:#C9A962;--brass-deep:#A88B45;
+    --seal:#C04851;--seal-deep:#8B2635;
+    --border:#D4C49A;--divider:rgba(201,169,98,0.35);
+    --jade:#5A6B5C;
+    --kai:'Kaiti SC','KaiTi','STKaiti','楷体',serif;
+    --serif:'Source Han Serif SC','SourceHanSerifSC','STSong','宋体',serif;
+    --sans:'PingFang SC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#1a1611;display:flex;justify-content:center;align-items:flex-start;gap:32px;padding:32px;font-family:var(--sans);}
+  .phone{
+    width:380px;height:780px;background:var(--bg);border-radius:36px;
+    box-shadow:0 30px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(201,169,98,.4);
+    overflow:hidden;display:flex;flex-direction:column;position:relative;
+  }
+  .statusbar{
+    height:34px;display:flex;justify-content:space-between;align-items:center;
+    padding:0 22px;font-size:12px;color:var(--ink-muted);background:var(--bg);
+  }
+  .scroll{
+    flex:1;overflow-y:auto;padding:10px 20px 10px;
+    background:radial-gradient(circle at 50% 0%, rgba(192,72,81,.07), transparent 40%),var(--bg);
+  }
+
+  /* ① 头部左侧只留"申论" */
+  .header{
+    display:flex;justify-content:space-between;align-items:center;padding:6px 0 8px;
+  }
+  .header .title{
+    font-family:var(--serif);font-weight:700;font-size:28px;color:var(--ink);letter-spacing:10px;
+  }
+  /* ③ 日期：4 个汉字宽，居中加字距调整 */
+  .header .date{
+    font-family:var(--kai);font-weight:700;font-size:13px;color:var(--paper);
+    background:var(--seal);padding:6px 10px;border-radius:2px;
+    transform:rotate(-3deg);letter-spacing:2px;text-align:center;
+    box-shadow:1px 1px 0 var(--seal-deep);
+    min-width:64px;       /* 固定宽度容纳 4 字 */
+    line-height:20px;
+  }
+
+  .card{
+    background:var(--paper);border:1px solid var(--border);
+    border-radius:4px;padding:12px 14px;margin-bottom:10px;
+    box-shadow:0 2px 6px rgba(61,51,43,.08);
+    position:relative;
+  }
+
+  /* ② 锦言 */
+  .quote-card .quote-head{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;
+  }
+  /* 锦言二字加大 */
+  .quote-card .quote-head .stamp{
+    font-family:var(--kai);font-weight:700;font-size:18px;     /* 由 11→18 */
+    color:var(--ink);letter-spacing:6px;                        /* 直接作为大标题字样，不再塞红块 */
+  }
+  /* "换一句" 红色小字（无边框） */
+  .quote-card .quote-head .refresh{
+    font-family:var(--kai);font-size:11px;color:var(--seal);
+    letter-spacing:2px;cursor:pointer;
+  }
+  .quote-text{
+    font-family:var(--kai);font-style:italic;color:var(--ink-soft);
+    font-size:13.5px;line-height:22px;margin-top:6px;
+  }
+  .quote-text::before{content:'“';color:var(--seal);font-size:18px;margin-right:2px;}
+  .quote-text::after{content:'”';color:var(--seal);font-size:18px;margin-left:2px;}
+  .quote-src{
+    display:block;text-align:right;
+    font-family:var(--kai);font-size:10.5px;color:var(--ink-muted);letter-spacing:2px;margin-top:2px;
+  }
+
+  /* 昨日总结 */
+  .yesterday-card .yhead{
+    font-family:var(--kai);font-size:13px;color:var(--ink-muted);
+    letter-spacing:4px;margin-bottom:8px;text-align:center;
+  }
+  .yesterday-card .ygrid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  }
+  .yesterday-card .ygrid .item{
+    text-align:center;border-right:1px dashed var(--divider);padding-right:6px;
+  }
+  .yesterday-card .ygrid .item:last-child{border-right:none;}
+  .yesterday-card .ygrid .item .num{
+    font-family:var(--serif);font-weight:700;font-size:26px;color:var(--ink);line-height:1;
+  }
+  .yesterday-card .ygrid .item .num.accent{color:var(--seal);}
+  .yesterday-card .ygrid .item .lbl{
+    font-family:var(--kai);font-size:11px;color:var(--ink-muted);
+    letter-spacing:3px;margin-top:6px;
+  }
+
+  /* ④ 今日待做 · 改 "，" */
+  .top-banner{
+    background:linear-gradient(180deg,var(--paper) 80%,var(--bg-alt) 100%);
+    border:1px solid var(--border);border-radius:4px;
+    padding:14px 14px 12px;margin-bottom:10px;
+    box-shadow:0 2px 6px rgba(61,51,43,.08);
+    position:relative;overflow:hidden;
+  }
+  .top-banner::after{
+    content:"";position:absolute;right:-12px;top:-12px;
+    width:64px;height:64px;border:1.5px dashed var(--brass);border-radius:50%;opacity:.5;
+  }
+  .top-banner .eyebrow{
+    font-family:var(--kai);font-size:12px;color:var(--ink-muted);letter-spacing:6px;text-align:center;
+  }
+  .top-banner .title{
+    font-family:var(--serif);font-weight:700;font-size:22px;color:var(--ink);
+    letter-spacing:4px;margin-top:6px;text-align:center;
+  }
+  .top-banner .progress-row{
+    margin-top:10px;display:flex;justify-content:center;gap:3px;
+  }
+  .top-banner .progress-row .seg{
+    width:40px;height:7px;border-radius:1px;background:var(--bg);
+    border:1px solid var(--divider);
+  }
+  .top-banner .progress-row .seg.on{background:var(--seal);border-color:var(--seal);}
+  .top-banner .progress-row .seg.now{
+    background:repeating-linear-gradient(45deg,var(--brass),var(--brass) 2px,var(--paper) 2px,var(--paper) 4px);
+    border-color:var(--brass);
+  }
+
+  .menu{padding:0 0 4px;}
+  .menu-row{
+    display:flex;align-items:center;gap:14px;
+    padding:9px 8px;
+    border-bottom:1px solid var(--divider);
+    position:relative;
+  }
+  .menu-row:first-child{border-top:1px solid var(--divider);}
+  .menu-row:last-child{border-bottom:none;}
+  .menu-row .index{
+    font-family:var(--serif);font-style:italic;font-weight:700;
+    font-size:22px;color:var(--seal);width:30px;flex-shrink:0;
+  }
+  .menu-row .index.g2{color:var(--brass-deep);}
+  .menu-row .index.g3{color:var(--jade);}
+  .menu-row .index.g4{color:var(--seal-deep);}
+  .menu-row .index.g5{color:var(--ink-soft);}
+  .menu-row .body{flex:1;min-width:0;}
+  .menu-row .ttl{
+    font-family:var(--serif);font-weight:700;font-size:15px;color:var(--ink);letter-spacing:3px;
+  }
+  .menu-row .sub{
+    font-family:var(--kai);font-size:10.5px;color:var(--ink-muted);
+    letter-spacing:1px;margin-top:1px;
+  }
+  .menu-row .arrow{color:var(--brass-deep);font-size:16px;}
+
+  .footer{
+    text-align:center;color:var(--ink-faint);
+    font-family:var(--kai);font-size:11px;letter-spacing:6px;
+    padding:6px 0 2px;
+  }
+
+  /* ⑤ 底部 Tab：放大、加明、整体压矮 */
+  .tabbar{
+    display:flex;align-items:flex-end;justify-content:space-around;
+    padding:6px 6px 10px;background:var(--paper);   /* 由 14/22 → 6/10 */
+    border-top:1px solid var(--divider);
+    gap:4px;
+  }
+  .tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    color:var(--ink-soft);
+  }
+  .tab .lbl{
+    font-family:var(--kai);font-weight:bold;
+    font-size:22px;
+    color:var(--ink-soft);
+    letter-spacing:6px;line-height:1;
+  }
+  .tab .lbl{
+    font-family:var(--kai);font-weight:bold;
+    font-size:22px;
+    color:var(--ink-soft);
+    letter-spacing:6px;line-height:1;
+    display:inline-block;
+  }
+  .tab .rule{ display:none; }
+  .tab .lbl::after{
+    content:"";display:block;
+    height:1.5px;background:var(--divider);
+    margin-top:3px;
+  }
+  .tab.active .lbl{
+    color:var(--seal);
+    text-shadow:0 1px 0 var(--seal-deep);
+  }
+  .tab.active .lbl::after{
+    height:3px;background:var(--seal);
+    box-shadow:0 2px 0 var(--seal-deep);
+  }
+
+  .label-v{position:absolute;top:10px;left:-50px;font-family:var(--kai);
+    color:#B8A88A;font-size:14px;letter-spacing:6px;writing-mode:vertical-rl;}
+</style>
+</head>
+<body>
+
+<div style="position:relative;">
+<div class="label-v">V3 · 改3</div>
+<div class="phone">
+
+  <div class="statusbar">
+    <span>13:47</span>
+    <span>5G · 84%</span>
+  </div>
+
+  <div class="scroll">
+
+    <!-- ① 头部：左侧只留"申论"（大字） -->
+    <div class="header">
+      <div class="title">申论</div>
+      <!-- ③ 日期：七月+XX 共 4 字。这里举 20 / 23 / 30 三种示例，用七月二十 -->
+      <div class="date">七月<br>二十</div>
+    </div>
+
+    <!-- 锦言：左侧大字"锦言"+ 右侧红字"换一句" -->
+    <div class="card quote-card">
+      <div class="quote-head">
+        <span class="stamp">锦言</span>
+        <span class="refresh">换一句</span>
+      </div>
+      <div class="quote-text">敢于负责、敢于担当，敢于闯出新路，敢于打破常规。</div>
+      <span class="quote-src">— 习近平 · 二〇二三</span>
+    </div>
+
+    <div class="card yesterday-card">
+      <div class="yhead">昨 日 总 结</div>
+      <div class="ygrid">
+        <div class="item"><div class="num">3</div><div class="lbl">已 读</div></div>
+        <div class="item"><div class="num accent">5</div><div class="lbl">标 记</div></div>
+        <div class="item"><div class="num">28</div><div class="lbl">分 钟</div></div>
+      </div>
+    </div>
+
+    <!-- ④ 今日待做：中间换 "，" -->
+    <div class="top-banner">
+      <div class="eyebrow">今 日 待 做</div>
+      <div class="title">晨起三篇，养浩然之气</div>
+      <div class="progress-row">
+        <div class="seg on"></div>
+        <div class="seg on"></div>
+        <div class="seg now"></div>
+        <div class="seg"></div>
+      </div>
+    </div>
+
+    <div class="menu">
+      <div class="menu-row">
+        <div class="index">壹</div>
+        <div class="body">
+          <div class="ttl">复盘回顾</div>
+          <div class="sub">本周精读 · 金句本 · 错题归档</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+      <div class="menu-row">
+        <div class="index g2">贰</div>
+        <div class="body">
+          <div class="ttl">素材学习</div>
+          <div class="sub">政策理论 · 基层治理 · 数字中国</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+      <div class="menu-row">
+        <div class="index g3">叁</div>
+        <div class="body">
+          <div class="ttl">题目练习</div>
+          <div class="sub">未答 · 国考 / 联考 / 申论</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+      <div class="menu-row">
+        <div class="index g4">肆</div>
+        <div class="body">
+          <div class="ttl">分析建议</div>
+          <div class="sub">薄弱题型 · 高频考点 · AI 评卷</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+      <div class="menu-row">
+        <div class="index g5">伍</div>
+        <div class="body">
+          <div class="ttl">积累笔记</div>
+          <div class="sub">按主题、来源、日期回顾</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+    </div>
+
+    <div class="footer">案 牍 劳 形 · 不 废 研 读</div>
+  </div>
+
+  <!-- ⑤ Tab：放大、加明、active 凸出 -->
+  <div class="tabbar">
+    <div class="tab active"><span class="lbl">积累</span></div>
+    <div class="tab"><span class="lbl">素材</span></div>
+    <div class="tab"><span class="lbl">题目</span></div>
+    <div class="tab"><span class="lbl">分析</span></div>
+    <div class="tab"><span class="lbl">设置</span></div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

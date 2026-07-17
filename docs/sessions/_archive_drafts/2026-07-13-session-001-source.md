@@ -1,0 +1,80 @@
+# Session 摘要 — 2026-07-13
+
+> 项目：申论精读 ShenlunApp (RN 0.74 + TS)
+> 工作流：brainstorming → writing-plans → subagent-driven-development
+
+## 进度
+
+- V3 首页定稿 + 5 Tab (积累/素材/题目/分析/设置)
+- 服务端 /api/articles?id-list= 上线验证
+- 客户端 getArticlesByIds + ModeTabs + ReviewScreen + tabBus + ActiveFilterContext
+- APK 重打 (28s) at C:\Users\hecto\ZCodeProject\app-debug.apk
+- Metro 起来 (8081)
+- 等用户 Android Studio Run 测试
+
+## 主要交付文件
+
+- src/api/client.ts - getArticlesByIds
+- src/storage/mmkv.ts - Article.tags?
+- src/navigation/tabBus.ts - payload support
+- src/components/ModeTabs.tsx - new
+- src/screens/ReviewScreen.tsx - new
+- src/App.tsx - Review route + ActiveFilterContext
+- src/screens/HomeScreen.tsx - menu items route to subpages
+
+## 设计文档
+
+- docs/superpowers/specs/2026-07-12-accumulate-review-design.md
+- docs/superpowers/plans/2026-07-12-accumulate-review.md
+- .superpowers/sdd/progress.md
+
+## 服务端
+
+- host: 124.223.5.144:8080 (nginx) / direct ubuntu@:2222
+- file: /opt/xuexi/09_选卡阅读/card_server.py
+- backup: card_server.py.bak (original 907 lines)
+- process: pgrep -f card_server (pid 341388)
+- log: /tmp/card_server.log
+
+## decisions
+```decisions
+- 复盘数据源用后端 /api/articles?id-list=（批量 ID 反查 file_path），不是在 client 端全缓存
+- 复盘 UI：按月 / 按主题二选切换（ModeTabs），默认按月
+- 笔记承载复用现有 GoldScreen，不另写 NotesScreen
+- ReviewScreen 的 tag chip 点击 → tabBus.set('source', { filter: { theme } })
+- SourceScreen 接收 filter 暂用 console.log 占位（P1 再消费）
+- 服务端插入 dispatcher 块时先用 sed 失败，改走 Python in-place edit 修复（缩进易错）
+- 服务端 shell 启动用 nohup python3 card_server.py > log 2>&1 &（setsid + nohup 在 SSH 退出时不可靠）
+- 服务端备份策略：每次 patch 前 cp card_server.py card_server.py.bak.<mtime>
+- 备份机制用 PowerShell 脚本，AI 每次调 powershell -File backup.ps1
+- Memory 分主题多文件：decisions / learnings / todos
+```
+
+## learnings
+```learnings
+- SSH 默认非交互模式下不能 accept-new fingerprint — 必须显式 -o StrictHostKeyChecking=accept-new
+- SSH 用户是 ubuntu 不是 root，之前 plan 写错踩了坑
+- 远程 nohup + setsid + disown 都不稳，单独 nohup ... & 反而最稳
+- Gradle toolchain JDK 17 不能从 GitHub 下（网络问题），必须用本机 JDK 17
+- React 0.74 + RN gradle-plugin 4 处 jvmToolchain(17) 要注释掉
+- kotlin.jvm.target.validation.mode=warning 消掉 Java 17 vs Kotlin 21 不匹配
+- ReviewScreen cache-first：MMKV 缓存条优先显示，缺失再 /api/articles 补
+- /api/articles 接受 file_path 形式的 id（不接 norm），服务端 by_path + by_norm 双查
+- 客户端 tabBus.set(key, payload) 二参扩展必须先把 Phase 5 做了，否则 ReviewScreen.tsc 不通过
+- PowerShell 5 函数里用正则反引号组合极易踩坑，用 IndexOf 替代正则更稳
+- PowerShell ZipFile.CreateFromDirectory 要求 source 是目录；单文件压缩用 ZipFile.Open + CreateEntryFromFile
+- PowerShell 中文注释混在 # 注释里一般 OK，但函数体内含反引号 + 中文字符串会触发 parser 错误
+```
+
+## todos
+```todos
+- [ ] 用户在 Android Studio Run 测试（Metro 已起）
+- [ ] 装 APK 截图反馈 UI（按月/按主题 + tag chip）
+- [ ] P1：SourceScreen 真正消费 activeFilter，把主题过滤做完整
+- [ ] P1：题目 Tab 真题库（要先有题库）
+- [ ] P2：分析 Tab 数据可视化（阅读曲线 / 主题分布）
+- [ ] P2：AI 评卷
+- [ ] P3：字号设置
+- [ ] P3：导出笔记
+- [ ] 服务端 /api/articles 待用户验稳定性（多日累积后看 missing 是否变化）
+```
