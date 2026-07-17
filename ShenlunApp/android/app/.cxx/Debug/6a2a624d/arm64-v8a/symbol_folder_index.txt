@@ -1,0 +1,1 @@
+C:\Users\hecto\ZCodeProject\ShenlunApp\android\app\build\intermediates\cxx\Debug\6a2a624d\obj\arm64-v8a
