@@ -1,1 +1,0 @@
-Place SourceHanSerifSC-Regular.otf here. Download from: https://github.com/adobe-fonts/source-han-serif/releases

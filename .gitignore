@@ -14,18 +14,18 @@ yarn-debug.log*
 yarn-error.log*
 .metro-health-check*
 
-# ─── Android 构建产物 ───
-android/.gradle/
-android/build/
-android/app/build/
-android/.idea/
-android/local.properties
-android/app/src/main/assets/index.android.bundle
-android/app/release/
-*.apk
-*.aab
-*.keystore
-!android/app/debug.keystore
+# ─── Android 构建产物（任意深度） ───
+**/.gradle/
+**/build/
+**/.idea/
+**/local.properties
+**/android/app/src/main/assets/index.android.bundle
+**/android/app/release/
+**/android/app/.cxx/
+**/*.apk
+**/*.aab
+**/*.keystore
+!**/android/app/debug.keystore
 
 # ─── iOS ───
 ios/Pods/
@@ -44,7 +44,6 @@ __pycache__/
 *.tmp
 *.bak
 *.orig
-*.swp
 ~$*
 
 # ─── 本地工具脚本输出 ───
