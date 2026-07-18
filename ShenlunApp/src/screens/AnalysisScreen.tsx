@@ -2,7 +2,7 @@
 // 分析建议 Tab —— 学习概览 + 高频主题 + 待补强 + AI 评卷入口
 // 数据源：本地 MMKV（getCachedArticles / getReadIds / getReadHistory / getLocalNotes）
 //   服务端没有题型字段，"薄弱题型" 用 "已读较少的主题" 替代
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,6 +12,7 @@ import {
   getCachedArticles, getReadHistory, countReadsInWindow,
   getLocalNotes, type Article,
 } from '../storage/mmkv';
+import { getAnalyticsSummary } from '../api/client';
 import { tabBus } from '../navigation/tabBus';
 import type { RootStackParamList } from '../App';
 
@@ -27,30 +28,51 @@ export default function AnalysisScreen() {
   const t = theme.tokens;
   const nav = useNavigation<NavProp>();
 
+  // 服务端统计（在线时用）/ 本地兜底（离线）
+  const [analytics, setAnalytics] = useState<Awaited<ReturnType<typeof getAnalyticsSummary>> | null>(null);
+  const [online, setOnline] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const a = await getAnalyticsSummary();
+      if (cancelled) return;
+      setAnalytics(a);
+      setOnline(a.online);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const stats = useMemo(() => {
     const articles = getCachedArticles();
-    const history = getReadHistory();
     const notes = getLocalNotes();
-    const monthReads = countReadsInWindow(30 * 24 * 60 * 60 * 1000);
-    const totalReads = history.length;
-
-    // 按主题聚合已读次数
-    const themeCount: Record<string, number> = {};
-    for (const a of articles) {
-      const k = themeOf(a);
-      themeCount[k] = (themeCount[k] || 0) + 1;
-    }
-    const sortedThemes = Object.entries(themeCount)
-      .sort((a, b) => b[1] - a[1]);
+    // 服务端聚合优先；否则用本地兜底
+    const monthReads = analytics?.month_reads ?? countReadsInWindow(30 * 24 * 60 * 60 * 1000);
+    const totalReads = analytics?.total_reads ?? getReadHistory().length;
+    // 主题聚合：服务端 themes 数组（如有），否则本地按 tags 聚合
+    const themes: Array<{ key: string; count: number }> = (analytics?.themes && analytics.themes.length > 0)
+      ? analytics.themes
+      : (() => {
+          const m: Record<string, number> = {};
+          for (const a of articles) {
+            const k = themeOf(a);
+            m[k] = (m[k] || 0) + 1;
+          }
+          return Object.entries(m)
+            .sort((a, b) => b[1] - a[1])
+            .map(([key, count]) => ({ key, count }));
+        })();
 
     return {
       articles: articles.length,
       totalReads,
       monthReads,
       notes: notes.length,
-      themes: sortedThemes,
+      themes,
+      sources: analytics?.sources ?? [],
+      dates: analytics?.dates ?? [],
     };
-  }, []);
+  }, [analytics]);
 
   // 高频主题 Top 5
   const topThemes = stats.themes.slice(0, 5);

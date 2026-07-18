@@ -1,7 +1,7 @@
 // src/screens/ReaderScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { getArticle, postNote, type Article } from '../api/client';
+import { getArticle, postNote, markReadRemote, type Article } from '../api/client';
 import { getCachedArticles, markRead } from '../storage/mmkv';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -43,6 +43,11 @@ export default function ReaderScreen(props: Props) {
     let cancelled = false;
     // 进入阅读页即把当前 id 标为已读，回到首页时会显示计数
     markRead(id);
+    // 同步已读到服务端（用于多设备同步 + 服务端 /api/analytics 聚合）
+    // 从缓存拿 article metadata（如果有），否则用最小字段
+    const meta = getCachedArticles().find(a => a.id === safeId);
+    if (meta) markReadRemote(meta);
+    else markReadRemote({ id: safeId, chapter: '', title: '', date: '', content: '', source: '', author: '', theme: '', tags: [] });
 
     // Cache-first: 文章正文已在 /api/today 响应里带过来了，优先用缓存，避免多余网络请求。
     // 若缓存缺失（如冷启动且未联网），再回退到 getArticle。

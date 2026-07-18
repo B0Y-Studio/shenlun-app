@@ -83,7 +83,7 @@ export default function SourceScreen() {
     const g = overrideGroup ?? activeGroup;
     setLoading(true);
     setErrorMsg(null);
-    const opts: Parameters<typeof getArticles>[0] = { pageSize: 100 };
+    const opts: Parameters<typeof getArticles>[0] = { pageSize: 100, with_summary: true };
     if (m === 'theme' && g)  opts.theme  = g;
     if (m === 'source' && g) opts.source = g;
     if (m === 'date' && g)   opts.date   = g;
@@ -104,7 +104,7 @@ export default function SourceScreen() {
     (async () => {
       setLoading(true);
       try {
-        const resp = await getArticles({ pageSize: 100 });
+        const resp = await getArticles({ pageSize: 100, with_summary: true });
         setArticles(resp.items);
         setTotal(resp.total);
         setOnline(resp.online);
