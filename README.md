@@ -100,6 +100,32 @@ index.js → src/App.tsx → MainTabs(activeKey='home') → HomeScreen
 rm -f ShenlunApp_V3_AndroidStudio/android/app/src/main/assets/index.android.bundle
 ```
 
+## 服务端 API
+
+服务端代码：`docs/server/card_server.py`（已部署到生产 `124.223.5.144`）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/today` | GET | 今日 3 篇（按设备排重） |
+| `/api/articles` | GET / **POST** | 全量素材库，支持 theme/source/date/q/page/pageSize 过滤。POST JSON 推荐（避免中文 URL 编码问题） |
+| `/api/card?norm=xxx` | GET | 单篇正文 HTML |
+| `/api/papers` | GET | 真题库列表（国考/省考/年/省份） |
+| `/api/paper?id=xxx` | GET | 真题库详情 |
+| `/api/questions?paper_id=xxx` | GET | 真题单题 |
+| `/api/mark-read` | POST | 标记已读 |
+| `/api/note` | POST | 保存金句/笔记 |
+
+### 部署
+
+```bash
+# 本地
+XUEXI_DIR=E:/申论知识库/09_选卡阅读 python3 docs/server/card_server.py
+
+# 远程
+scp docs/server/card_server.py ubuntu@124.223.5.144:/opt/xuexi/09_选卡阅读/
+ssh ubuntu@124.223.5.144 'pkill -9 -f card_server; cd /opt/xuexi/09_选卡阅读 && nohup python3 card_server.py > /tmp/card_server.log 2>&1 &'
+```
+
 ## License
 
 MIT
