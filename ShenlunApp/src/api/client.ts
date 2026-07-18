@@ -65,6 +65,87 @@ export async function getArticlesByIds(ids: string[]): Promise<{items: Article[]
   }
 }
 
+// === 全量素材库（/api/articles，POST JSON 避免 URL 中文编码） ===
+
+export interface ArticlesListResp {
+  items: Article[];
+  total: number;
+  page: number;
+  pageSize: number;
+  themes: Array<{ key: string; count: number }>;
+  sources: Array<{ key: string; count: number }>;
+  dates: Array<{ key: string; count: number }>;
+}
+
+export interface ArticlesListResult extends ArticlesListResp {
+  /** true 表示来自服务端；false 表示离线缓存降级 */
+  online: boolean;
+}
+
+export async function getArticles(opts: {
+  theme?: string;
+  source?: string;
+  date?: string;       // YYYY / YYYY-MM / YYYY-MM-DD
+  q?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<ArticlesListResult> {
+  try {
+    const body: Record<string, any> = {};
+    if (opts.theme)  body.theme  = opts.theme;
+    if (opts.source) body.source = opts.source;
+    if (opts.date)   body.date   = opts.date;
+    if (opts.q)      body.q      = opts.q;
+    body.page     = opts.page     ?? 1;
+    body.pageSize = opts.pageSize ?? 50;
+
+    const res = await fetch(`${BASE}/api/articles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    // 服务端 items: [{ id, norm, title, date, source, author, tags, category, source_type, month, url, file_path }]
+    // → Article: id 保留 file_path，chapter=source，theme=tags[0]，tags 保留
+    const items: Article[] = (data.items ?? []).map((it: any) => ({
+      id: it.id ?? it.file_path ?? it.title,
+      chapter: it.source || '',
+      title: it.title || '',
+      date: it.date || '',
+      content: '',  // 全量列表不需要正文；Reader 屏用 getArticle(id) 按需拉
+      highlight: '',
+      source: it.source || '',
+      author: it.author || '',
+      theme: (it.tags && it.tags[0]) || '',
+      tags: it.tags || [],
+    }));
+    return {
+      items,
+      total: data.total ?? items.length,
+      page: data.page ?? 1,
+      pageSize: data.pageSize ?? items.length,
+      themes: data.themes ?? [],
+      sources: data.sources ?? [],
+      dates: data.dates ?? [],
+      online: true,
+    };
+  } catch {
+    // 离线降级：返回本地缓存
+    const cached = getCachedArticles();
+    return {
+      items: cached,
+      total: cached.length,
+      page: 1,
+      pageSize: cached.length,
+      themes: [],
+      sources: [],
+      dates: [],
+      online: false,
+    };
+  }
+}
+
 // === 真题库 ===
 
 export interface Paper {

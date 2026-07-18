@@ -1,37 +1,20 @@
 // src/screens/SourceScreen.tsx
-// 素材学习 Tab —— 按主题/来源/日期 查看已读积累库（V3 风格）
-// 数据源：MMKV 中 getCachedArticles()（即历史 /api/today 拉取过的全部文章）
+// 素材学习 Tab —— 按主题/来源/日期 查看全量素材库（V3 风格）
+// 数据源：服务端 POST /api/articles（带过滤）
+// 离线降级：服务端失败时返回 MMKV 缓存
 // 跳转协议：从 ReviewScreen 点 tag chip → tabBus.set('source', { filter: { theme } }) 预填主题
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { useActiveFilter } from '../App';
-import { getCachedArticles, type Article } from '../storage/mmkv';
 import { ModeTabs } from '../components/ModeTabs';
 import { ArticleCard } from '../components/ArticleCard';
+import { getArticles } from '../api/client';
+import type { Article } from '../storage/mmkv';
 import type { RootStackParamList } from '../App';
-
-// 把 Article 适配成 ArticleCard 期望的 props（首张标记为"精"）
-function toCardProps(
-  article: Article,
-  index: number,
-  total: number,
-  showTheme: boolean,
-  showSource: boolean,
-) {
-  return {
-    chapter: article.chapter || (article.tags?.[0] ?? ''),
-    title: article.title,
-    content: article.highlight || article.content.slice(0, 120),
-    highlight: article.highlight,
-    index,
-    total,
-    isRead: false,
-  };
-}
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -43,31 +26,39 @@ const MODE_OPTIONS = [
   { key: 'date',   label: '按 日 期' },
 ] as const;
 
-function bucketByTheme(articles: Article[]): Record<string, Article[]> {
-  const out: Record<string, Article[]> = {};
+interface GroupBucket { key: string; count: number; list: Article[] }
+
+function bucketByTheme(articles: Article[]): GroupBucket[] {
+  const map: Record<string, Article[]> = {};
   for (const a of articles) {
     const k = a.tags?.[0] || a.chapter || '未分类';
-    (out[k] ||= []).push(a);
+    (map[k] ||= []).push(a);
   }
-  return out;
+  return Object.entries(map)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([key, list]) => ({ key, count: list.length, list }));
 }
 
-function bucketBySource(articles: Article[]): Record<string, Article[]> {
-  const out: Record<string, Article[]> = {};
+function bucketBySource(articles: Article[]): GroupBucket[] {
+  const map: Record<string, Article[]> = {};
   for (const a of articles) {
     const k = a.source || '未署名';
-    (out[k] ||= []).push(a);
+    (map[k] ||= []).push(a);
   }
-  return out;
+  return Object.entries(map)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([key, list]) => ({ key, count: list.length, list }));
 }
 
-function bucketByDate(articles: Article[]): Record<string, Article[]> {
-  const out: Record<string, Article[]> = {};
+function bucketByDate(articles: Article[]): GroupBucket[] {
+  const map: Record<string, Article[]> = {};
   for (const a of articles) {
     const k = a.date || '未知日期';
-    (out[k] ||= []).push(a);
+    (map[k] ||= []).push(a);
   }
-  return out;
+  return Object.entries(map)
+    .sort((a, b) => b[0].localeCompare(a[0])) // 日期倒序
+    .map(([key, list]) => ({ key, count: list.length, list }));
 }
 
 export default function SourceScreen() {
@@ -77,37 +68,79 @@ export default function SourceScreen() {
   const activeFilter = useActiveFilter();
 
   const [mode, setMode] = useState<Mode>('theme');
-  // 各模式的当前 group（key）
   const [activeGroup, setActiveGroup] = useState<string | null>(
     (activeFilter?.theme as string) ?? null
   );
-  const [loading] = useState(false);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [online, setOnline] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 一次性从 MMKV 拉取全部已读素材（已通过 /api/today 缓存）
-  const all = useMemo(() => getCachedArticles(), []);
+  // 从服务端拉数据（POST JSON 避免中文 URL 编码）
+  const fetchPage = useCallback(async (overrideMode?: Mode, overrideGroup?: string | null) => {
+    const m = overrideMode ?? mode;
+    const g = overrideGroup ?? activeGroup;
+    setLoading(true);
+    setErrorMsg(null);
+    const opts: Parameters<typeof getArticles>[0] = { pageSize: 100 };
+    if (m === 'theme' && g)  opts.theme  = g;
+    if (m === 'source' && g) opts.source = g;
+    if (m === 'date' && g)   opts.date   = g;
+    try {
+      const resp = await getArticles(opts);
+      setArticles(resp.items);
+      setTotal(resp.total);
+      setOnline(resp.online);
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? '未知错误');
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, activeGroup]);
 
-  // 当前模式的 group 列表（按出现顺序，文章多的排前）
-  const groups = useMemo(() => {
-    const map =
-      mode === 'theme'  ? bucketByTheme(all) :
-      mode === 'source' ? bucketBySource(all) :
-                          bucketByDate(all);
-    return Object.entries(map)
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([key, list]) => ({ key, count: list.length, list }));
-  }, [mode, all]);
+  // 首次加载：服务端 /api/articles 不带过滤拿首页 100 条 + 总量
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const resp = await getArticles({ pageSize: 100 });
+        setArticles(resp.items);
+        setTotal(resp.total);
+        setOnline(resp.online);
+      } catch (e: any) {
+        setErrorMsg(e?.message ?? '未知错误');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  // 当前选中 group 的文章列表
-  const visible = useMemo(() => {
-    if (!activeGroup) return all;
-    const g = groups.find(g => g.key === activeGroup);
-    return g?.list ?? [];
-  }, [activeGroup, groups, all]);
-
+  // 切换模式时重新拉全量（不传过滤）
   const onChangeMode = useCallback((k: Mode) => {
     setMode(k);
-    setActiveGroup(null); // 切模式清空选中 group
-  }, []);
+    setActiveGroup(null);
+    fetchPage(k, null);
+  }, [fetchPage]);
+
+  // 点击 chip 时按服务端过滤
+  const onSelectGroup = useCallback((k: string | null) => {
+    setActiveGroup(k);
+    fetchPage(undefined, k);
+  }, [fetchPage]);
+
+  // 客户端二次分桶（chip 行展示用）
+  const groups = useMemo<GroupBucket[]>(() => {
+    if (mode === 'theme')  return bucketByTheme(articles);
+    if (mode === 'source') return bucketBySource(articles);
+    return bucketByDate(articles);
+  }, [mode, articles]);
+
+  const visible = useMemo(() => {
+    if (!activeGroup) return articles;
+    const g = groups.find(g => g.key === activeGroup);
+    return g?.list ?? articles;
+  }, [activeGroup, groups, articles]);
 
   const onItemPress = useCallback((id: string) => {
     nav.navigate('Reader', { id });
@@ -123,16 +156,19 @@ export default function SourceScreen() {
         <Text style={[styles.subtitle, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
           政策理论 · 基层治理 · 数字中国
         </Text>
+        <Text style={[styles.onlineHint, { color: online ? t.jade : t.inkFaint }]}>
+          {online ? `· 在线 · 全量 ${total} 篇` : `· 离线 · 缓存 ${total} 篇`}
+        </Text>
       </View>
 
-      {/* 模式切换条（按主题 / 按来源 / 按日期） */}
+      {/* 模式切换条 */}
       <ModeTabs<Mode> value={mode} options={MODE_OPTIONS as any} onChange={onChangeMode} />
 
-      {/* group 筛选（横向滚动 chips） */}
+      {/* group 筛选 */}
       {groups.length > 0 ? (
         <View style={styles.chipsRow}>
           <FlatList
-            data={[{ key: '', count: all.length, list: all }, ...groups]}
+            data={[{ key: '', count: articles.length }, ...groups]}
             keyExtractor={item => item.key || '__all__'}
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -141,7 +177,7 @@ export default function SourceScreen() {
               const active = (item.key === '' && !activeGroup) || item.key === activeGroup;
               return (
                 <Pressable
-                  onPress={() => setActiveGroup(item.key || null)}
+                  onPress={() => onSelectGroup(item.key || null)}
                   style={({ pressed }) => [
                     styles.chip,
                     { borderColor: t.divider, backgroundColor: active ? t.seal : t.paper },
@@ -164,15 +200,21 @@ export default function SourceScreen() {
         </View>
       ) : null}
 
-      {/* 主体列表 */}
+      {/* 主体 */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={t.brass} />
         </View>
-      ) : all.length === 0 ? (
+      ) : errorMsg ? (
         <View style={styles.center}>
           <Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-            还没有素材库内容{'\n'}回首页读几篇文章，会自动积累到素材库
+            加载失败：{errorMsg}
+          </Text>
+        </View>
+      ) : articles.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+            还没有素材库内容{'\n'}检查网络或服务端 /api/articles
           </Text>
         </View>
       ) : (
@@ -182,7 +224,13 @@ export default function SourceScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item, index }) => (
             <ArticleCard
-              {...toCardProps(item, index + 1, visible.length, mode !== 'theme', mode !== 'source')}
+              chapter={item.chapter || (item.tags?.[0] ?? '')}
+              title={item.title}
+              content={item.content || item.highlight || '（暂无摘要，点击阅读全文）'}
+              highlight={item.highlight}
+              index={index + 1}
+              total={visible.length}
+              isRead={false}
               onPress={() => onItemPress(item.id)}
             />
           )}
@@ -208,13 +256,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: { fontSize: fontSizes.hero, letterSpacing: 6, marginBottom: spacing.xs },
-  subtitle: { fontSize: fontSizes.caption, letterSpacing: 2, marginBottom: spacing.sm },
-  chipsRow: {
-    paddingVertical: spacing.sm,
-  },
-  chipsContent: {
-    paddingHorizontal: spacing.lg,
-  },
+  subtitle: { fontSize: fontSizes.caption, letterSpacing: 2, marginBottom: spacing.xs },
+  onlineHint: { fontSize: fontSizes.micro, letterSpacing: 1 },
+  chipsRow: { paddingVertical: spacing.sm },
+  chipsContent: { paddingHorizontal: spacing.lg },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
