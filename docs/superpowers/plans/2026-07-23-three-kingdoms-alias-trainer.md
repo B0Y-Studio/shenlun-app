@@ -255,13 +255,10 @@ export function parsePath(input) {
   const segments = [];
   let i = 0;
 
-  // First segment must be a bare identifier (or must start with [N]/['k'])
-  if (input[0] === '[') {
-    const next = readIndex(input, 0);
-    if (!next) return { ok: false, error: 'bad-path' };
-    segments.push(next.value);
-    i = next.end;
-  } else {
+  // First segment must be a bare identifier. We intentionally reject paths
+  // starting with `[N]` or `['k']` because they have no root object to walk
+  // from — that would be a global access, which the trainer does not allow.
+  {
     const seg = readSegment(input, 0);
     if (!seg) return { ok: false, error: 'bad-path' };
     segments.push(seg.value);
