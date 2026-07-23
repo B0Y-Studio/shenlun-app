@@ -764,10 +764,11 @@ export class TrainerService {
 
     const segmentsJson = JSON.stringify(parsed.segments);
     const valueLiteral = ser.expr;
-    // The expression walks to the parent and verifies writability of the
-    // leaf descriptor before assigning. This handles frozen objects and
-    // non-writable props without raising in JS land.
-    const expr = `(function(){ try { var s=${segmentsJson}; var o=window; for (var i=0;i<s.length-1;i++){ if (o==null) return { __error:'null-deref' }; o = o[s[i]]; } if (o==null) return { __error:'null-parent' }; var last=s[s.length-1]; var desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(o) === Object.prototype ? o : Object.getPrototypeOf(o) || o, last); if (desc && desc.writable === false) return { __error:'not-writable' }; if (desc && desc.set) return { __error:'has-setter' }; o[last] = ${valueLiteral}; return window.__trainerSafeRead(o[last]); } catch (e) { return { __error: String(e) }; } })()`;
+    // Delegate the path walk + writability check + assignment to the
+    // __trainerSafeWrite helper injected on every new document by
+    // ensureHelpersInjected(). This keeps the IIFE here small and avoids
+    // duplicating the path-walk logic in two places.
+    const expr = `(function(){ try { return window.__trainerSafeWrite(${segmentsJson}, ${valueLiteral}); } catch (e) { return { __error: 'write-failed:' + String(e) }; } })()`;
 
     try {
       const value = await this.cdp.eval(expr);
