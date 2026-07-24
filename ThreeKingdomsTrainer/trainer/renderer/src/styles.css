@@ -120,6 +120,56 @@ html, body, #root {
   font-size: 12px;
 }
 
+.city-table-wrap {
+  margin-top: 4px;
+}
+
+.city-table-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.city-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.city-table th, .city-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+}
+
+.city-table th {
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+.city-table th:first-child, .city-table td:first-child {
+  text-align: left;
+}
+
+.city-table.mini td {
+  color: #888;
+}
+
+.tbl-btn {
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid #888;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.tbl-btn:hover {
+  background: #e8f4fd;
+}
+
 .history {
   width: 100%;
   border-collapse: collapse;

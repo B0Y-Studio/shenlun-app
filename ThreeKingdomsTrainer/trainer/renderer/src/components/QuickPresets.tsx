@@ -7,6 +7,19 @@ interface FactionInfo {
   food: number | string;
 }
 
+interface CityRow {
+  id: number;
+  owner: string;
+  soldiers: number;
+  economy: number;
+  agriculture: number;
+  population: number;
+  publicOrder: number;
+  infantry: number;
+  archer: number;
+  cavalry: number;
+}
+
 interface Props {
   connected: boolean;
   selectedFactionId: string | null;
@@ -15,30 +28,21 @@ interface Props {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const ROOT = 'EconomyEngine.getInstance()';
-
 const FACTION_PRESETS = (fid: string) => ([
   { label: 'Gold → 999999', path: `${ROOT}.world.factions.get("${fid}").gold`, value: '999999' },
   { label: 'Food → 99999',  path: `${ROOT}.world.factions.get("${fid}").food`, value: '99999' },
   { label: 'Reputation → 99', path: `${ROOT}.world.factions.get("${fid}").reputation`, value: '99' },
 ]);
 
-const CITY_PRESETS = (cid: number) => ([
-  { label: `City ${cid} soldiers → 99999`,   path: `${ROOT}.world.cities.get(${cid}).soldiers`,   value: '99999' },
-  { label: `City ${cid} troops → 99999`,      path: `${ROOT}.world.cities.get(${cid}).troops`,     value: '99999' },
-  { label: `City ${cid} economy → 9999`,      path: `${ROOT}.world.cities.get(${cid}).economy`,    value: '9999' },
-  { label: `City ${cid} population → 999999`, path: `${ROOT}.world.cities.get(${cid}).population`,  value: '999999' },
-  { label: `City ${cid} agriculture → 9999`,  path: `${ROOT}.world.cities.get(${cid}).agriculture`, value: '9999' },
-]);
-
-const ALL_CITY_IDS = Array.from({ length: 44 }, (_, i) => i + 1);
-
 // ── component ──────────────────────────────────────────────────────────────
 export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: Props) {
   const [factions, setFactions] = useState<FactionInfo[]>([]);
+  const [cities, setCities] = useState<CityRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cityLoading, setCityLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cityId, setCityId] = useState(1);
 
+  // ── load faction list from smoke output ──────────────────────────────────
   const loadFactions = async () => {
     if (!connected) return;
     setLoading(true);
@@ -49,9 +53,7 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
       const out: FactionInfo[] = [];
       for (const line of lines) {
         const m = line.match(/world\.factions\.get\("([^"]+)"\)\s+name=(\S+)\s+leaderId=(\S+)\s+gold=([\-\d.]+)\s+food=([\-\d.]+)/);
-        if (m) {
-          out.push({ id: m[1], gold: Number(m[4]), food: Number(m[5]) });
-        }
+        if (m) out.push({ id: m[1], gold: Number(m[4]), food: Number(m[5]) });
       }
       setFactions(out);
       if (out.length > 0 && !selectedFactionId) onSelectFaction(out[0].id);
@@ -62,25 +64,68 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
     }
   };
 
+  // ── scan all cities via CDP one-shot ────────────────────────────────────
+  const scanCities = async () => {
+    if (!connected) return;
+    setCityLoading(true);
+    setError(null);
+    try {
+      const r = await bridge.scanCities();
+      if (!r.ok) { setError(r.error ?? 'scan failed'); return; }
+      const all = (r.cities ?? []) as CityRow[];
+      // Sort by id
+      all.sort((a, b) => a.id - b.id);
+      setCities(all);
+    } catch (e) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setCityLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (connected && factions.length === 0 && !loading) loadFactions();
+    if (connected && cities.length === 0 && !cityLoading) scanCities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
-  if (!connected) return <div className="presets">Presets disabled: not connected to game.</div>;
-
+  // ── apply a preset ───────────────────────────────────────────────────────
   const doApply = async (path: string, value: string) => {
     const r = await window.trainer.apply({ path, value });
     if (!r.ok) setError(`apply failed: ${r.error}`);
+    else scanCities(); // refresh after successful apply
   };
+
+  // ── apply per-troop-type ─────────────────────────────────────────────────
+  const applyTroops = async (cid: number, infantry: number, archer: number, cavalry: number) => {
+    const base = `${ROOT}.world.cities.get(${cid})`;
+    await doApply(`${base}.troops.infantry`, String(infantry));
+    await doApply(`${base}.troops.archer`, String(archer));
+    await doApply(`${base}.troops.cavalry`, String(cavalry));
+    // Also set soldiers to total (soldiers = total manpower pool)
+    const total = infantry + archer + cavalry;
+    await doApply(`${base}.soldiers`, String(Math.round(total * 1.5)));
+  };
+
+  // ── filtered views ──────────────────────────────────────────────────────
+  const playerCities = cities.filter((c) => c.owner === selectedFactionId);
+  const enemyCities = cities.filter((c) => c.owner !== selectedFactionId);
+
+  if (!connected) return <div className="presets">Presets disabled: not connected to game.</div>;
 
   return (
     <div className="presets">
       <div className="row">
-        <button onClick={loadFactions} disabled={loading}>{loading ? 'Loading\u2026' : 'Refresh faction list'}</button>
+        <button onClick={loadFactions} disabled={loading}>
+          {loading ? 'Loading\u2026' : 'Refresh faction list'}
+        </button>
+        <button onClick={scanCities} disabled={cityLoading}>
+          {cityLoading ? 'Scanning\u2026' : `Scan cities${cities.length > 0 ? ` (${cities.length})` : ''}`}
+        </button>
         {error && <span className="err">{error}</span>}
       </div>
 
+      {/* ── faction presets ─────────────────────────────────────────────── */}
       {factions.length > 0 && (
         <>
           <label className="faction-pick">
@@ -101,17 +146,69 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
         </>
       )}
 
-      <label className="faction-pick">
-        City to modify
-        <select value={cityId} onChange={(e) => setCityId(Number(e.target.value))}>
-          {ALL_CITY_IDS.map((id) => (<option key={id} value={id}>City {id}</option>))}
-        </select>
-      </label>
-      <div className="row">
-        {CITY_PRESETS(cityId).map((p) => (
-          <button key={p.path} title={`${p.path} = ${p.value}`} onClick={() => doApply(p.path, p.value)}>{p.label}</button>
-        ))}
-      </div>
+      {/* ── player cities table ─────────────────────────────────────────── */}
+      {playerCities.length > 0 && (
+        <div className="city-table-wrap">
+          <div className="city-table-title">Your cities ({playerCities.length})</div>
+          <table className="city-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Pop</th><th>Econ</th><th>Soldiers</th>
+                <th>Infantry</th><th>Archer</th><th>Cavalry</th>
+                <th title="Apply">+100</th><th title="Apply">Max</th>
+              </tr>
+            </thead>
+            <tbody>
+              {playerCities.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.id}</td>
+                  <td>{(c.population / 1000).toFixed(1)}k</td>
+                  <td>{c.economy}</td>
+                  <td>{c.soldiers}</td>
+                  <td>{c.infantry}</td>
+                  <td>{c.archer}</td>
+                  <td>{c.cavalry}</td>
+                  <td>
+                    <button
+                      className="tbl-btn"
+                      title="Add 100 to each troop type + soldiers"
+                      onClick={() => applyTroops(c.id, c.infantry + 100, c.archer + 100, c.cavalry + 100)}
+                    >+100</button>
+                  </td>
+                  <td>
+                    <button
+                      className="tbl-btn"
+                      title="Set all troops to 99999"
+                      onClick={() => applyTroops(c.id, 99999, 99999, 99999)}
+                    >Max</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── enemy cities ────────────────────────────────────────────────── */}
+      {enemyCities.length > 0 && (
+        <div className="city-table-wrap">
+          <div className="city-table-title">Other cities ({enemyCities.length})</div>
+          <table className="city-table mini">
+            <thead>
+              <tr><th>#</th><th>Owner</th><th>Soldiers</th></tr>
+            </thead>
+            <tbody>
+              {enemyCities.slice(0, 10).map((c) => (
+                <tr key={c.id}>
+                  <td>{c.id}</td>
+                  <td>{c.owner}</td>
+                  <td>{c.soldiers}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

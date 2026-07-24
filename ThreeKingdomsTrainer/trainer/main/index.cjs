@@ -136,6 +136,37 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('trainer:scanCities', async () => {
+    if (!service) return { ok: false, error: 'game-not-running' };
+    try {
+      const value = await cdp.eval(`(()=>{
+        var EE = EconomyEngine.getInstance();
+        var cs = EE.world.cities;
+        var ids = Array.from(cs.keys());
+        var out = [];
+        for (var i=0;i<ids.length;i++){
+          var c = cs.get(ids[i]);
+          out.push({
+            id: ids[i],
+            owner: c.owner,
+            soldiers: c.soldiers,
+            economy: c.economy,
+            agriculture: c.agriculture,
+            population: c.population,
+            publicOrder: c.publicOrder,
+            infantry: (c.troops && c.troops.infantry) || 0,
+            archer: (c.troops && c.troops.archer) || 0,
+            cavalry: (c.troops && c.troops.cavalry) || 0,
+          });
+        }
+        return JSON.stringify(out);
+      })()`);
+      return { ok: true, cities: JSON.parse(value) };
+    } catch (e) {
+      return { ok: false, error: String(e?.message ?? e) };
+    }
+  });
+
   ipcMain.handle('trainer:quit', async () => {
     if (cdp) await cdp.close();
     app.quit();

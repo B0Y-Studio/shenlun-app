@@ -6,6 +6,7 @@ export const bridge = {
   inspect: (path: string): Promise<InspectResult> =>
     window.trainer.inspect({ path }),
   runSmoke: () => window.trainer.runSmoke(),
+  scanCities: () => window.trainer.scanCities(),
   subscribeStatus: (cb: (s: ConnectionStatus) => void) =>
     window.trainer.subscribe('status', cb),
   quit: () => window.trainer.quit(),
