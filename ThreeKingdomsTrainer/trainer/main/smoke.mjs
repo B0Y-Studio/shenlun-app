@@ -5,12 +5,12 @@ const CANDIDATE_RE = /^(gameStore|state|app|store|session|root|game|world|player
 const VALUE_KEY_RE = /^(gold|coins|money|rice|food|silver|funds|hp|maxHp|mp|treasury|population|soldiers|comrades|treasur|strength)$/i;
 
 const PRINT_EXPR = `(function(){
-  var keys = Object.keys(window).filter(function(k){ return ${CANDIDATE_RE.source}.test(k); });
+  var keys = Object.keys(window).filter(function(k){ return /${CANDIDATE_RE.source}/.test(k); });
   return JSON.stringify(keys);
 })()`;
 
 const SCAN_EXPR = `(function(){
-  var roots = Object.keys(window).filter(function(k){ return ${CANDIDATE_RE.source}.test(k); });
+  var roots = Object.keys(window).filter(function(k){ return /${CANDIDATE_RE.source}/.test(k); });
   var hits = [];
   function walk(v, path, depth){
     if (depth > 6 || v == null) return;
@@ -18,7 +18,7 @@ const SCAN_EXPR = `(function(){
     for (var k in v) {
       if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
       var child = v[k];
-      if (${VALUE_KEY_RE.source}.test(k) && typeof child !== 'object') {
+      if (/${VALUE_KEY_RE.source}/.test(k) && typeof child !== 'object') {
         hits.push(path + '.' + k + '=' + String(child));
       } else if (typeof child === 'object') {
         walk(child, path + '.' + k, depth+1);
