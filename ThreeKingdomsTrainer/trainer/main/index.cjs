@@ -88,6 +88,16 @@ async function createWindow() {
     },
   });
 
+  // Forward renderer console + errors to main's terminal so we can see
+  // exactly what's happening in the bundled React app.
+  mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
+    const tag = ['log', 'warn', 'error', 'info'][level] ?? 'log';
+    console.log(`[renderer:${tag}] ${message} (${source}:${line})`);
+  });
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[renderer:load-fail] ${code} ${desc} url=${url}`);
+  });
+
   if (devUrl) {
     await mainWindow.loadURL(devUrl);
   } else {
