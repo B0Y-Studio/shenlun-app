@@ -2,12 +2,43 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePath } from '../trainer/main/pathParser.mjs';
 
-const OK = [
-  ['state.player.gold', ['state', 'player', 'gold']],
-  ['cities[0].name', ['cities', '0', 'name']],
-  [`units['cavalry'].count`, ['units', 'cavalry', 'count']],
-  ['_a$.b', ['_a$', 'b']],
-  ['arr[12]', ['arr', '12']],
+// Plain-object paths (v1 grammar)
+const IDX_OK = [
+  ['state.player.gold', [
+    { kind: 'id', key: 'state' },
+    { kind: 'id', key: 'player' },
+    { kind: 'id', key: 'gold' },
+  ]],
+  ['cities[0].name', [
+    { kind: 'id', key: 'cities' },
+    { kind: 'idx', key: '0' },
+    { kind: 'id', key: 'name' },
+  ]],
+  [`units['cavalry'].count`, [
+    { kind: 'id', key: 'units' },
+    { kind: 'idx', key: 'cavalry' },
+    { kind: 'id', key: 'count' },
+  ]],
+  ['_a$.b', [
+    { kind: 'id', key: '_a$' },
+    { kind: 'id', key: 'b' },
+  ]],
+  ['arr[12]', [
+    { kind: 'id', key: 'arr' },
+    { kind: 'idx', key: '12' },
+  ]],
+  // Map.get call syntax (v1.1)
+  ['world.cities.get(1).economy', [
+    { kind: 'id', key: 'world' },
+    { kind: 'id', key: 'cities' },
+    { kind: 'get', key: '1' },
+    { kind: 'id', key: 'economy' },
+  ]],
+  [`world.cities.get('capital')`, [
+    { kind: 'id', key: 'world' },
+    { kind: 'id', key: 'cities' },
+    { kind: 'get', key: 'capital' },
+  ]],
 ];
 
 const BAD = [
@@ -18,17 +49,24 @@ const BAD = [
   'a[',
   'a]',
   'a[]',
-  'a[k]', // unquoted non-numeric index
+  'a[k]',
   'a.__proto__',
   'a.constructor',
   'a.prototype',
   'a.Function',
   'a.eval',
-  'a["a\\nb"]', // backslash in string index
-  "a['\nb']",   // newline in string index
+  'a["a\\nb"]',
+  "a['\nb']",
+  // v1.1 — method calls only allow `.get(`
+  'world.set(1)',
+  'world.foo(1)',
+  'world.get(',         // unterminated
+  'world.get()',        // missing arg
+  'world.get(1',        // missing close paren
+  'world.get(a)',       // non-literal arg
 ];
 
-for (const [input, expected] of OK) {
+for (const [input, expected] of IDX_OK) {
   test(`parses ${JSON.stringify(input)}`, () => {
     assert.deepEqual(parsePath(input), { ok: true, segments: expected });
   });

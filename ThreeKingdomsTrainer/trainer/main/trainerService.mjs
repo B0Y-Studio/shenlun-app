@@ -1,9 +1,10 @@
 // Orchestrates: parsePath → build IIFE expression → cdpClient.eval
 //
-// The IIFEs embed (a) the parsed segments and (b) the JSON-encoded value
-// directly into source text. We deliberately do NOT concatenate the user's
-// path into source — segments come from the parser as plain strings and
-// are spliced as data, not as code.
+// The IIFEs embed (a) the parsed segments-as-data and (b) the JSON-encoded
+// value directly into source text. We never concatenate the user's path
+// into source — segments come from the parser as data (already JSON-safe)
+// and are spliced as a JSON literal that the page walks via runtime code
+// generated here.
 
 import { parsePath } from './pathParser.mjs';
 import { serializeScalar } from './safeSerialize.mjs';
@@ -12,6 +13,25 @@ import { SAFE_READ_SOURCE, SAFE_WRITE_SOURCE } from './safeInjectScript.mjs';
 
 /** @typedef {import('./cdpClient.mjs').CdpClient} Cdp */
 
+/**
+ * Encode parsed segments into a JS source string that walks `obj` through
+ * each step, returning a new `obj`. Steps:
+ *   - {kind:'id'|'idx'} → obj = obj[key]
+ *   - {kind:'get'}      → obj = obj.get(key)
+ *
+ * The output is an expression that evaluates to the value walked to; it
+ * embeds only JSON data (segments + value), no user-supplied source.
+ *
+ * @param {string} varName   name of the JS variable holding the starting value
+ * @returns {string}         source expression fragment after `varName = `
+ */
+function walkExpr(varName, segmentsJson) {
+  // Split into a small chain of statements emitted as source.
+  // We hand-format this so the result is the most readable source we can
+  // produce for chrome devtools to display alongside the eval call.
+  return `var steps=${segmentsJson}; for (var i=0;i<steps.length;i++){ var s=steps[i]; if (${varName}==null) return { __error:'null-deref' }; ${varName} = (s.kind==='get') ? ${varName}.get(s.key) : ${varName}[s.key]; }`;
+}
+
 export class TrainerService {
   /** @param {Cdp} cdp */
   constructor(cdp) {
@@ -19,9 +39,6 @@ export class TrainerService {
   }
 
   async ensureHelpersInjected() {
-    // Idempotent — Page.addScriptToEvaluateOnNewDocument returns a fresh id
-    // each call. We rely on the fact that re-injection is harmless; the
-    // helpers just get re-defined.
     await this.cdp.injectOnNewDocument(SAFE_READ_SOURCE);
     await this.cdp.injectOnNewDocument(SAFE_WRITE_SOURCE);
   }
@@ -33,7 +50,8 @@ export class TrainerService {
     if (!parsed.ok) return { ok: false, error: parsed.error };
 
     const segmentsJson = JSON.stringify(parsed.segments);
-    const expr = `(function(){ try { var s=${segmentsJson}; var o=window; for (var i=0;i<s.length;i++){ if (o==null) return { __error:'null-deref' }; o = o[s[i]]; } return window.__trainerSafeRead(o); } catch (e) { return { __error: String(e) }; } })()`;
+    const walk = walkExpr('o', segmentsJson);
+    const expr = `(function(){ try { var o=window; ${walk}; return window.__trainerSafeRead(o); } catch (e) { return { __error: 'inspect-failed:' + String(e) }; } })()`;
 
     try {
       const value = await this.cdp.eval(expr);

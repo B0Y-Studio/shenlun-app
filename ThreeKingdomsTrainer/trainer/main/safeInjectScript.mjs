@@ -29,8 +29,10 @@ window.__trainerSafeRead = function readLeaf(value) {
 };
 `;
 
-// segments is a plain JS array of strings (parsed by the Node-side pathParser).
-// We do not re-parse segments here — the path grammar is enforced server-side.
+// segments is a parsed-path array of `{kind, key}` steps. We do not re-parse
+// segments here — the path grammar is enforced server-side. Steps can use
+// either `obj[key]` (plain object) or `obj.get(key)` (Map / collection);
+// see trainerService.mjs#walkExpr for the matching reader walk.
 export const SAFE_WRITE_SOURCE = `
 window.__trainerSafeWrite = function writeLeaf(segments, value) {
   try {
@@ -38,19 +40,27 @@ window.__trainerSafeWrite = function writeLeaf(segments, value) {
       return { __error: 'bad-path' };
     }
     var o = window;
+    // Walk to the parent of the leaf.
     for (var i = 0; i < segments.length - 1; i++) {
       if (o == null) return { __error: 'null-deref' };
-      o = o[segments[i]];
+      var s = segments[i];
+      o = (s.kind === 'get') ? o.get(s.key) : o[s.key];
     }
     if (o == null) return { __error: 'null-parent' };
     var last = segments[segments.length - 1];
+    if (last.kind === 'get') {
+      // Writing through .get(N) is not meaningful for Map; the user almost
+      // certainly meant to mutate the value at that key. Refuse rather than
+      // silently no-op.
+      return { __error: 'cannot-write-through-get' };
+    }
     var proto = Object.getPrototypeOf(o);
-    var desc = proto ? Object.getOwnPropertyDescriptor(proto, last)
-                      : Object.getOwnPropertyDescriptor(o, last);
+    var desc = proto ? Object.getOwnPropertyDescriptor(proto, last.key)
+                      : Object.getOwnPropertyDescriptor(o, last.key);
     if (desc && desc.writable === false) return { __error: 'not-writable' };
     if (desc && typeof desc.set === 'function') return { __error: 'has-setter' };
-    o[last] = value;
-    return window.__trainerSafeRead(o[last]);
+    o[last.key] = value;
+    return window.__trainerSafeRead(o[last.key]);
   } catch (e) {
     return { __error: 'write-failed:' + String(e) };
   }
