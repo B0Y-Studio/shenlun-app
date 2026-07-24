@@ -34,6 +34,24 @@ const SCAN_EXPR = `(function(){
     if (ctorName === 'Map') {
       var sample = Array.from(v.keys()).slice(0, 3).map(function(k){ return String(k); }).join(',');
       hits.push(path + ' (Map size=' + v.size + ' sample=' + sample + ')');
+      // v1.1: also peek at the first Map entry's numeric fields, since that's
+      // where the trainer will read/apply values next.
+      var firstKey = v.keys().next().value;
+      if (firstKey !== undefined) {
+        var firstVal = v.get(firstKey);
+        if (firstVal && typeof firstVal === 'object') {
+          var sampleFields = Object.keys(firstVal).filter(function(k){
+            return VALUE_RE.test(k);
+          }).slice(0, 8);
+          for (var s = 0; s < sampleFields.length; s++) {
+            var fk = sampleFields[s];
+            var fv = firstVal[fk];
+            if (typeof fv === 'number' || typeof fv === 'string' || typeof fv === 'boolean') {
+              hits.push(path + '.get(' + JSON.stringify(String(firstKey)) + ').' + fk + '=' + String(fv));
+            }
+          }
+        }
+      }
       return;
     }
     if (ctorName === 'Set') return;
