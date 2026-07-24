@@ -35,30 +35,38 @@ const FACTION_PRESETS = (fid: string) => ([
 ]);
 
 // ── editable city row ─────────────────────────────────────────────────────
-function TableRow({ city, onApply }: { city: CityRow; onApply: (inf: number, arch: number, cav: number) => void }) {
+function TableRow({ city, onApplyTroops, onApplySoldiers }: {
+  city: CityRow;
+  onApplyTroops: (inf: number, arch: number, cav: number) => void;
+  onApplySoldiers: (n: number) => void;
+}) {
   const [i, setI] = useState(String(city.infantry));
   const [a, setA] = useState(String(city.archer));
   const [c, setC] = useState(String(city.cavalry));
+  const [s, setS] = useState(String(city.soldiers));
 
-  // Keep inputs in sync when city data refreshes
+  // Keep inputs in sync when city data refreshes (after a scan).
   useEffect(() => {
     setI(String(city.infantry));
     setA(String(city.archer));
     setC(String(city.cavalry));
-  }, [city.infantry, city.archer, city.cavalry]);
+    setS(String(city.soldiers));
+  }, [city.infantry, city.archer, city.cavalry, city.soldiers]);
 
-  const toN = (s: string) => { const n = parseInt(s, 10); return isNaN(n) ? 0 : n; };
+  const toN = (v: string) => { const n = parseInt(v, 10); return isNaN(n) ? 0 : n; };
 
   return (
     <tr key={city.id}>
       <td>{city.id}</td>
       <td>{(city.population / 1000).toFixed(1)}k</td>
       <td>{city.economy}</td>
-      <td>{city.soldiers}</td>
+      <td><input className="tb-inp" value={s} onChange={(e) => setS(e.target.value)} />
+          <button className="tbl-btn" title="Set soldier pool" onClick={() => onApplySoldiers(toN(s))}>Set</button>
+      </td>
       <td><input className="tb-inp" value={i} onChange={(e) => setI(e.target.value)} /></td>
       <td><input className="tb-inp" value={a} onChange={(e) => setA(e.target.value)} /></td>
       <td><input className="tb-inp" value={c} onChange={(e) => setC(e.target.value)} /></td>
-      <td><button className="tbl-btn" onClick={() => onApply(toN(i), toN(a), toN(c))}>Set</button></td>
+      <td><button className="tbl-btn" onClick={() => onApplyTroops(toN(i), toN(a), toN(c))}>Set</button></td>
     </tr>
   );
 }
@@ -126,14 +134,20 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
   };
 
   // ── apply per-troop-type ─────────────────────────────────────────────────
+  // soldiers is an independent pool (total manpower), NOT infantry+archer+cavalry.
+  // We do not auto-write soldiers here. If the table reads stale data, the user
+  // can refresh via the Scan cities button after the next in-game turn settles.
   const applyTroops = async (cid: number, infantry: number, archer: number, cavalry: number) => {
     const base = `${ROOT}.world.cities.get(${cid})`;
     await doApply(`${base}.troops.infantry`, String(infantry));
     await doApply(`${base}.troops.archer`, String(archer));
     await doApply(`${base}.troops.cavalry`, String(cavalry));
-    // Also set soldiers to total (soldiers = total manpower pool)
-    const total = infantry + archer + cavalry;
-    await doApply(`${base}.soldiers`, String(Math.round(total * 1.5)));
+  };
+
+  // Bonus utility: set soldiers (manpower pool) directly without touching troops.
+  const applySoldiers = async (cid: number, n: number) => {
+    const base = `${ROOT}.world.cities.get(${cid})`;
+    await doApply(`${base}.soldiers`, String(n));
   };
 
   // ── filtered views ──────────────────────────────────────────────────────
@@ -182,14 +196,19 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
           <table className="city-table">
             <thead>
               <tr>
-                <th>#</th><th>Pop</th><th>Econ</th><th>Soldiers</th>
+                <th>#</th><th>Pop</th><th>Econ</th><th>Soldiers [Set]</th>
                 <th>Infantry</th><th>Archer</th><th>Cavalry</th>
-                <th>Set</th>
+                <th>Troops [Set]</th>
               </tr>
             </thead>
             <tbody>
               {playerCities.map((c) => (
-                <TableRow key={c.id} city={c} onApply={(inf, arch, cav) => applyTroops(c.id, inf, arch, cav)} />
+                <TableRow
+                  key={c.id}
+                  city={c}
+                  onApplyTroops={(inf, arch, cav) => applyTroops(c.id, inf, arch, cav)}
+                  onApplySoldiers={(n) => applySoldiers(c.id, n)}
+                />
               ))}
             </tbody>
           </table>
