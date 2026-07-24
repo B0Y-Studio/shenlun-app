@@ -1,0 +1,21 @@
+appId: com.b0ystudio.three-kingdoms-alias-trainer
+productName: Three Kingdoms Alias Trainer
+copyright: Copyright (c) 2026 B0Y-Studio
+directories:
+  output: out
+  buildResources: build
+files:
+  - dist/**/*
+  - trainer/main/**/*
+  - trainer/preload/**/*
+  - trainer/renderer/index.html
+  - package.json
+  - "!**/*.map"
+asarUnpack:
+  - trainer/preload/preload.cjs
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
