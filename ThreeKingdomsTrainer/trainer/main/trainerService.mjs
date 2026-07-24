@@ -16,20 +16,15 @@ import { SAFE_READ_SOURCE, SAFE_WRITE_SOURCE } from './safeInjectScript.mjs';
 /**
  * Encode parsed segments into a JS source string that walks `obj` through
  * each step, returning a new `obj`. Steps:
- *   - {kind:'id'|'idx'} → obj = obj[key]
- *   - {kind:'get'}      → obj = obj.get(key)
+ *   - {kind:'id'|'idx'}    → obj = obj[key]
+ *   - {kind:'get'}         → obj = obj.get(key)
+ *   - {kind:'getInstance'} → obj = obj.getInstance()
  *
  * The output is an expression that evaluates to the value walked to; it
  * embeds only JSON data (segments + value), no user-supplied source.
- *
- * @param {string} varName   name of the JS variable holding the starting value
- * @returns {string}         source expression fragment after `varName = `
  */
 function walkExpr(varName, segmentsJson) {
-  // Split into a small chain of statements emitted as source.
-  // We hand-format this so the result is the most readable source we can
-  // produce for chrome devtools to display alongside the eval call.
-  return `var steps=${segmentsJson}; for (var i=0;i<steps.length;i++){ var s=steps[i]; if (${varName}==null) return { __error:'null-deref' }; ${varName} = (s.kind==='get') ? ${varName}.get(s.key) : ${varName}[s.key]; }`;
+  return `var steps=${segmentsJson}; for (var i=0;i<steps.length;i++){ var s=steps[i]; if (${varName}==null) return { __error:'null-deref' }; if (s.kind==='getInstance') ${varName} = ${varName}.getInstance(); else if (s.kind==='get') ${varName} = ${varName}.get(s.key); else ${varName} = ${varName}[s.key]; }`;
 }
 
 export class TrainerService {

@@ -52,10 +52,28 @@ export function parsePath(input) {
       if (!name) return { ok: false, error: 'bad-path' };
       const parenIdx = i + 1 + name.value.length;
       if (input[parenIdx] === '(') {
-        if (name.value !== 'get') return { ok: false, error: 'bad-method' };
+        // v1.1 — only allow `.get(arg)` (Map lookup) and `.getInstance()` (no
+        // arg, returns singleton) at parse time. Anything else would inject
+        // arbitrary method calls and is forbidden with `bad-method`.
+        let methodKind;
+        if (name.value === 'get') {
+          methodKind = 'get';
+        } else if (name.value === 'getInstance') {
+          methodKind = 'getInstance';
+        } else {
+          return { ok: false, error: 'bad-method' };
+        }
         const r = readCall(input, parenIdx);
         if (!r) return { ok: false, error: 'bad-path' };
-        segments.push({ kind: 'get', key: r.value });
+        // For `.get(N)` we expect exactly one argument; for `.getInstance()`
+        // we expect zero arguments.
+        if (methodKind === 'getInstance' && r.value !== '') {
+          return { ok: false, error: 'getInstance-takes-no-args' };
+        }
+        if (methodKind === 'get' && r.value === '') {
+          return { ok: false, error: 'get-takes-one-arg' };
+        }
+        segments.push({ kind: methodKind, key: r.value });
         i = r.end;
       } else {
         if (FORBIDDEN.has(name.value)) return { ok: false, error: 'forbidden-segment' };
@@ -109,11 +127,20 @@ function readIndex(input, start) {
   return null;
 }
 
-// Reads " ( arg ) " where `start` points at '(' and `arg` is a numeric or
-// single-/double-quoted string. Whitelisted by caller (currently only `.get`).
+// Reads " ( arg ) " where `start` points at '(' and `arg` is one of:
+//   - numeric (<digits>)
+//   - single-quoted string ('...')
+//   - double-quoted string ("...")
+//   - empty (zero-arg call, e.g. `.getInstance()`); returns value=''
+//
+// Whitelisted by caller (currently `.get` and `.getInstance`).
 function readCall(input, start) {
   // start points at '('
   if (input[start] !== '(') return null;
+  // Zero-arg form: empty parens immediately close.
+  if (input[start + 1] === ')') {
+    return { value: '', end: start + 2 };
+  }
   NUM_INDEX.lastIndex = start + 1;
   const nm = NUM_INDEX.exec(input);
   if (nm && nm.index === start + 1) {

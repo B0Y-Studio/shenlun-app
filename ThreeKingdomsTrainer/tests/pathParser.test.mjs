@@ -39,6 +39,15 @@ const IDX_OK = [
     { kind: 'id', key: 'cities' },
     { kind: 'get', key: 'capital' },
   ]],
+  // Singleton getInstance (v1.1 follow-up)
+  ['EconomyEngine.getInstance().world.factions.get("FACTION_1534").gold', [
+    { kind: 'id', key: 'EconomyEngine' },
+    { kind: 'getInstance', key: '' },
+    { kind: 'id', key: 'world' },
+    { kind: 'id', key: 'factions' },
+    { kind: 'get', key: 'FACTION_1534' },
+    { kind: 'id', key: 'gold' },
+  ]],
 ];
 
 const BAD = [
@@ -57,13 +66,15 @@ const BAD = [
   'a.eval',
   'a["a\\nb"]',
   "a['\nb']",
-  // v1.1 — method calls only allow `.get(`
+  // v1.1 — method calls only allow `.get(` and `.getInstance(`
   'world.set(1)',
   'world.foo(1)',
   'world.get(',         // unterminated
-  'world.get()',        // missing arg
+  'world.get()',        // empty arg (used to be valid for getInstance, now reserved)
   'world.get(1',        // missing close paren
   'world.get(a)',       // non-literal arg
+  'EconomyEngine.getInstance(1)',  // getInstance takes no args
+  'EconomyEngine.getInstance("x")', // getInstance takes no args
 ];
 
 for (const [input, expected] of IDX_OK) {
