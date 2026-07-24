@@ -3,15 +3,23 @@
 """
 HTTP 服务：手机访问 http://本机IP:8080
 - 仅用 Python 标准库
-- GET  /api/today                 今日 3 篇（按设备排重）
-- GET  /api/card?norm=xxx         单篇 HTML
-- GET/POST /api/articles          全量素材库分页查询（theme/source/date/q/page/pageSize）
-- GET  /api/article/<id>          单篇详情（body_html + summary）
-- GET  /api/stats|history|highlights  用户行为记录（按 device_id）
-- GET  /api/analytics/summary     学习概览 + 主题/来源/月份分布
-- GET  /api/analytics/themes?top=N 高频主题 Top N
-- POST /api/mark-read|highlight|note|skip  写入用户行为
-- POST /api/articles              全量素材库 JSON body 入口（避免 URL 编码）
+- 所有端点 (除 /api/articles 客户端用 POST JSON) 都接受可选 ?device_id=xxx：
+  - 不传 → 全局统计；传了 → 该设备级统计
+- GET  /api/today                          今日 3 篇（按设备排重）
+- GET  /api/card?norm=xxx                  单篇 JSON {norm, title, body(HTML 字符串)}
+- GET  /api/article/<id>                   单篇详情：{id, norm, ..., body_html, summary}
+- GET/POST /api/articles                   全量素材库（theme/source/date/q/page/pageSize）
+  - GET  参数走 query string
+  - POST 参数走 JSON body（避免中文 URL 编码问题；with_summary 兼容 '1' / 1 / true）
+- GET  /api/stats                          today/week/month/total reads + 总 highlights/notes
+- GET  /api/history?limit=N                已读历史（按 read_at desc）
+- GET  /api/highlights?limit=N             金句列表（按 created_at desc）
+- GET  /api/analytics/summary              学习概览 + themes/sources/dates 分布
+- GET  /api/analytics/themes?top=N         高频主题 Top N
+- POST /api/mark-read                      写入已读
+- POST /api/highlight                       写入高亮（注意是单数，与 GET /api/highlights 复数区分）
+- POST /api/note                           写入笔记
+- POST /api/skip                           标记跳过
 """
 import os
 import re
@@ -152,20 +160,26 @@ CACHE_PATH = os.path.join(OUT_DIR, "_article_cache.pkl")
 CACHE_TTL = 300  # 5分钟
 
 def scan_shiping_articles():
-    """扫描时评库，带缓存（5分钟）"""
-    # 尝试读缓存
+    """扫描时评库，带缓存（5分钟）
+
+    缓存兼容性：必须满足 (1) 是 list (2) 非空 (3) 每项都含 'summary' 字段。
+    老 pickle（缺 summary）→ 触发重扫 + 重新 pickle，
+    下次 5 分钟内走完整缓存路径。空列表（`[]`）会被 (2) 拦截，触发重扫。
+    """
     if os.path.exists(CACHE_PATH):
         age = time.time() - os.path.getmtime(CACHE_PATH)
         if age < CACHE_TTL:
             try:
                 with open(CACHE_PATH, 'rb') as f:
                     cached = pickle.load(f)
-                # 兼容老 pickle（无 summary 字段），强制重新扫描
-                if cached and isinstance(cached, list) and 'summary' in cached[0]:
+                if (cached
+                    and isinstance(cached, list)
+                    and len(cached) > 0
+                    and all(isinstance(a, dict) and 'summary' in a for a in cached)):
                     return cached
             except:
                 pass
-    # 缓存不命中或格式老：执行下面全量扫描 + 写 pickle
+    # 缓存不命中 / 老 pickle / 空列表：执行下面全量扫描 + 写 pickle
 
     # 重新扫描
     articles = []
@@ -400,7 +414,12 @@ def list_articles(qs):
         source = (qs.get('source', [''])[0] or '').strip()
         date = (qs.get('date', [''])[0] or '').strip()    # YYYY / YYYY-MM / YYYY-MM-DD
         q = (qs.get('q', [''])[0] or '').strip()
-        with_summary = (qs.get('with_summary', ['0'])[0] or '0') == '1'
+        # 兼容 with_summary 是 '1' (GET 字符串) / 1 (POST JSON 数字) / True (POST JSON bool)
+        _ws = qs.get('with_summary', ['0'])[0]
+        if isinstance(_ws, bool):
+            with_summary = _ws
+        else:
+            with_summary = str(_ws or '0') == '1'
         try:
             page = max(1, int(qs.get('page', ['1'])[0]))
         except Exception:
@@ -533,7 +552,7 @@ def get_article_by_id(article_id):
             'month': target.get('month', ''),
             'url': target.get('url', ''),
             'body_html': html,
-            # 详情用更长 summary（240），优先用 pickle，缺失时再生成
+            # 优先用 pickle 里的 summary（与 /api/articles 列表同字段同长度），缺失时按需生成
             'summary': target.get('summary') or _extract_summary(fp, max_len=160),
         }, ensure_ascii=False)
     except Exception as e:

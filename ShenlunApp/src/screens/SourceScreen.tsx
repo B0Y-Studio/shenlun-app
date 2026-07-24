@@ -3,9 +3,13 @@
 // 数据源：服务端 POST /api/articles（带过滤）
 // 离线降级：服务端失败时返回 MMKV 缓存
 // 跳转协议：从 ReviewScreen 点 tag chip → tabBus.set('source', { filter: { theme } }) 预填主题
-//   presetThemeRef 用 useRef 在挂载时一次性快照 activeFilter?.theme，
-//   不随后续 activeFilter 变化而更新（避免后续切换 filter 覆盖当前数据）；
-//   前提：SourceScreen 在 Tab 切换期间保持挂载（React Navigation 默认行为）。
+//   presetThemeRef: 挂载时一次性快照 activeFilter?.theme
+//   - 当前架构: MainTabs 用 {activeKey === 'source' && <SourceScreen />} 条件渲染，
+//     切 Tab 时 SourceScreen 会 unmount→remount，每次挂载重新读 activeFilter
+//   - 当前 ref 等价于 useState，保留 ref 是为了未来切到 React Navigation Tab Navigator
+//     (keep-alive) 时仍然有效，注释里说明这个前提
+//   - 副作用：若 MainTabs 未来改成 keep-alive (lazy=false, unmountOnBlur=false)，
+//     屏内 tabBus 切换 filter 不会刷新数据（按需重 fetch 即可）
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';

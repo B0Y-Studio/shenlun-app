@@ -44,10 +44,12 @@ export default function ReaderScreen(props: Props) {
     // 进入阅读页即把当前 id 标为已读，回到首页时会显示计数
     markRead(id);
     // 同步已读到服务端（用于多设备同步 + 服务端 /api/analytics 聚合）
-    // 从缓存拿 article metadata（如果有），否则用最小字段
+    // 仅在缓存命中时调：fallback 路径（缓存 miss）下文章 title/date 等关键字段缺失，
+    // 远程 markRead 守卫会拦截且不写库，本地 markRead 仍生效（用户看到的"已读"状态正确），
+    // 只是该次已读不参与服务端跨设备同步 / analytics —— 这是已知降级，不是 bug。
     const meta = getCachedArticles().find(a => a.id === safeId);
     if (meta) markReadRemote(meta);
-    else markReadRemote({ id: safeId, chapter: '', title: '', date: '', content: '', source: '', author: '', theme: '', tags: [] });
+    // fallback: 不调 markReadRemote（避免无效网络请求和服务端必拒）
 
     // Cache-first: 文章正文已在 /api/today 响应里带过来了，优先用缓存，避免多余网络请求。
     // 若缓存缺失（如冷启动且未联网），再回退到 getArticle。
