@@ -2,39 +2,85 @@
 // common patterns. Returns the list (also prints it for the CLI use case).
 
 const CANDIDATE_RE = /^(gameStore|state|app|store|session|root|game|world|player)$/i;
-const VALUE_KEY_RE = /^(gold|coins|money|rice|food|silver|funds|hp|maxHp|mp|treasury|population|soldiers|comrades|treasur|strength)$/i;
+// Field-name allowlist. `food|silver|funds|hp|economy|...` covers both the
+// generic v1 list and the BLIND삼국-specific numeric fields we observed on
+// economy-game cities (economy, agriculture, publicOrder, troops, soldiers).
+const VALUE_KEY_RE = /^(gold|coins|money|rice|food|silver|funds|hp|maxHp|mp|treasury|population|soldiers|comrades|treasur|strength|cash|economy|agriculture|publicOrder|level|reputation|loyalty|popularity|morale|gold_?total|maxGold|food_?total|troops|reservedTroopsByType)$/i;
 
+// Roots pass: keys on window whose name looks like a state object.
 const PRINT_EXPR = `(function(){
-  var keys = Object.keys(window).filter(function(k){ return /${CANDIDATE_RE.source}/.test(k); });
+  var keys = Object.keys(window).filter(function(k){ return /^${CANDIDATE_RE.source}/.test(k); });
   return JSON.stringify(keys);
 })()`;
 
+// v1.1 deep probe: in addition to plain roots, find singleton classes via
+// `getInstance()` and walk one level into their public fields. Reports both
+// plain-object hits and Map shapes as <root>.<field>[.get(k)].<field>=value.
+//
+// All walker code runs *inside* the IIFE, because Runtime.evaluate executes
+// in the page context and cannot call Node-side helpers.
 const SCAN_EXPR = `(function(){
-  var roots = Object.keys(window).filter(function(k){ return /${CANDIDATE_RE.source}/.test(k); });
   var hits = [];
-  function walk(v, path, depth){
-    if (depth > 6 || v == null) return;
+  var seen = new Set();
+  var VALUE_RE = /^(?:${VALUE_KEY_RE.source})$/i;
+
+  function walkInto(v, path, depth) {
+    if (depth > 4) return;
+    if (v == null || seen.has(v)) return;
+    if (hits.length > 200) return;
     if (typeof v !== 'object') return;
-    for (var k in v) {
-      if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
-      var child = v[k];
-      if (/${VALUE_KEY_RE.source}/.test(k) && typeof child !== 'object') {
+    seen.add(v);
+    var ctorName = (v.constructor && v.constructor.name) || '';
+    if (ctorName === 'Map') {
+      var sample = Array.from(v.keys()).slice(0, 3).map(function(k){ return String(k); }).join(',');
+      hits.push(path + ' (Map size=' + v.size + ' sample=' + sample + ')');
+      return;
+    }
+    if (ctorName === 'Set') return;
+    var keys = Object.keys(v);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var child;
+      try { child = v[k]; } catch (e) { continue; }
+      if (child == null) continue;
+      var t = typeof child;
+      if ((t === 'number' || t === 'string' || t === 'boolean') && VALUE_RE.test(k)) {
         hits.push(path + '.' + k + '=' + String(child));
-      } else if (typeof child === 'object') {
-        walk(child, path + '.' + k, depth+1);
+      } else if (t === 'object' && !seen.has(child) && depth < 3 &&
+                 child.constructor && child.constructor.name &&
+                 child.constructor.name !== 'Array' &&
+                 Object.keys(child).length < 80) {
+        walkInto(child, path + '.' + k, depth + 1);
       }
     }
   }
-  for (var i=0;i<roots.length;i++) {
-    try { walk(window[roots[i]], roots[i], 0); } catch (e) {}
+
+  // 1) plain roots (v1)
+  var plainRoots = Object.keys(window).filter(function(k){
+    return /^${CANDIDATE_RE.source}/.test(k) && /^(object|function)$/.test(typeof window[k]);
+  });
+  for (var i = 0; i < plainRoots.length; i++) {
+    walkInto(window[plainRoots[i]], plainRoots[i], 0);
   }
-  return JSON.stringify(hits.slice(0, 20));
+
+  // 2) singletons (v1.1) — try every capitalized function for getInstance().
+  var wkeys = Object.keys(window);
+  for (var j = 0; j < wkeys.length; j++) {
+    var k = wkeys[j];
+    if (!/^[A-Z]/.test(k)) continue;
+    var v = window[k];
+    if (typeof v !== 'function' || typeof v.getInstance !== 'function') continue;
+    var inst;
+    try { inst = v.getInstance(); } catch (e) { continue; }
+    if (inst == null || seen.has(inst)) continue;
+    walkInto(inst, k + '.getInstance()', 0);
+  }
+
+  return JSON.stringify(hits.slice(0, 30));
 })()`;
 
 export async function runSmoke(cdp) {
   await cdp.connect();
-  // Make sure helpers exist before any inspect/apply (smoke doesn't need them
-  // but it primes the page for later calls).
   const rootsJson = await cdp.eval(PRINT_EXPR);
   const scanJson = await cdp.eval(SCAN_EXPR);
   return {
