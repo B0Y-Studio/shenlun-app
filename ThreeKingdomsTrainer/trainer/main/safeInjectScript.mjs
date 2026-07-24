@@ -45,7 +45,7 @@ window.__trainerSafeWrite = function writeLeaf(segments, value) {
       if (o == null) return { __error: 'null-deref' };
       var s = segments[i];
       if (s.kind === 'getInstance') o = o.getInstance();
-      else if (s.kind === 'get') o = o.get(s.key);
+      else if (s.kind === 'get') o = o.get(s.argKind === 'num' ? Number(s.key) : s.key);
       else o = o[s.key];
     }
     if (o == null) return { __error: 'null-parent' };

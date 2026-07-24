@@ -16,15 +16,16 @@ import { SAFE_READ_SOURCE, SAFE_WRITE_SOURCE } from './safeInjectScript.mjs';
 /**
  * Encode parsed segments into a JS source string that walks `obj` through
  * each step, returning a new `obj`. Steps:
- *   - {kind:'id'|'idx'}    → obj = obj[key]
- *   - {kind:'get'}         → obj = obj.get(key)
- *   - {kind:'getInstance'} → obj = obj.getInstance()
+ *   - {kind:'id'|'idx'}                       → obj = obj[key]
+ *   - {kind:'get', argKind:'num', key:'1009'} → obj = obj.get(1009)
+ *   - {kind:'get', argKind:'str', key:'x'}    → obj = obj.get("x")
+ *   - {kind:'getInstance'}                    → obj = obj.getInstance()
  *
  * The output is an expression that evaluates to the value walked to; it
  * embeds only JSON data (segments + value), no user-supplied source.
  */
 function walkExpr(varName, segmentsJson) {
-  return `var steps=${segmentsJson}; for (var i=0;i<steps.length;i++){ var s=steps[i]; if (${varName}==null) return { __error:'null-deref' }; if (s.kind==='getInstance') ${varName} = ${varName}.getInstance(); else if (s.kind==='get') ${varName} = ${varName}.get(s.key); else ${varName} = ${varName}[s.key]; }`;
+  return `var steps=${segmentsJson}; for (var i=0;i<steps.length;i++){ var s=steps[i]; if (${varName}==null) return { __error:'null-deref' }; if (s.kind==='getInstance') ${varName} = ${varName}.getInstance(); else if (s.kind==='get') ${varName} = ${varName}.get(s.argKind==='num' ? Number(s.key) : s.key); else ${varName} = ${varName}[s.key]; }`;
 }
 
 export class TrainerService {

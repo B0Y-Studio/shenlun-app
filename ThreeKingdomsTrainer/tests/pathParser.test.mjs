@@ -31,21 +31,29 @@ const IDX_OK = [
   ['world.cities.get(1).economy', [
     { kind: 'id', key: 'world' },
     { kind: 'id', key: 'cities' },
-    { kind: 'get', key: '1' },
+    { kind: 'get', argKind: 'num', key: '1' },
     { kind: 'id', key: 'economy' },
   ]],
   [`world.cities.get('capital')`, [
     { kind: 'id', key: 'world' },
     { kind: 'id', key: 'cities' },
-    { kind: 'get', key: 'capital' },
+    { kind: 'get', argKind: 'str', key: 'capital' },
   ]],
   // Singleton getInstance (v1.1 follow-up)
+  ['EconomyEngine.getInstance().world.officers.get(1009).reputation', [
+    { kind: 'id', key: 'EconomyEngine' },
+    { kind: 'getInstance' },
+    { kind: 'id', key: 'world' },
+    { kind: 'id', key: 'officers' },
+    { kind: 'get', argKind: 'num', key: '1009' },
+    { kind: 'id', key: 'reputation' },
+  ]],
   ['EconomyEngine.getInstance().world.factions.get("FACTION_1534").gold', [
     { kind: 'id', key: 'EconomyEngine' },
-    { kind: 'getInstance', key: '' },
+    { kind: 'getInstance' },
     { kind: 'id', key: 'world' },
     { kind: 'id', key: 'factions' },
-    { kind: 'get', key: 'FACTION_1534' },
+    { kind: 'get', argKind: 'str', key: 'FACTION_1534' },
     { kind: 'id', key: 'gold' },
   ]],
 ];

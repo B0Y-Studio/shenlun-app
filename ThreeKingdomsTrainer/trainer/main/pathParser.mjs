@@ -67,13 +67,22 @@ export function parsePath(input) {
         if (!r) return { ok: false, error: 'bad-path' };
         // For `.get(N)` we expect exactly one argument; for `.getInstance()`
         // we expect zero arguments.
-        if (methodKind === 'getInstance' && r.value !== '') {
+        if (methodKind === 'getInstance' && r.kind !== 'empty') {
           return { ok: false, error: 'getInstance-takes-no-args' };
         }
-        if (methodKind === 'get' && r.value === '') {
+        if (methodKind === 'get' && r.kind === 'empty') {
           return { ok: false, error: 'get-takes-one-arg' };
         }
-        segments.push({ kind: methodKind, key: r.value });
+        // v1.2 — carry the literal-kind forward so the runtime can emit
+        // either a numeric literal (e.g. 1009) or a string literal
+        // (e.g. "FACTION_1534"). Map keys are not interchangeable: a Map
+        // keyed by numbers won't respond to string lookups.
+        if (methodKind === 'get') {
+          segments.push({ kind: 'get', argKind: r.kind, key: r.value });
+        } else {
+          // getInstance has no argKind.
+          segments.push({ kind: 'getInstance' });
+        }
         i = r.end;
       } else {
         if (FORBIDDEN.has(name.value)) return { ok: false, error: 'forbidden-segment' };
@@ -131,36 +140,38 @@ function readIndex(input, start) {
 //   - numeric (<digits>)
 //   - single-quoted string ('...')
 //   - double-quoted string ("...")
-//   - empty (zero-arg call, e.g. `.getInstance()`); returns value=''
+//   - empty (zero-arg call, e.g. `.getInstance()`)
 //
 // Whitelisted by caller (currently `.get` and `.getInstance`).
+//
+// Returns { kind, value, end } where `kind` is `'num' | 'str' | 'empty'`.
 function readCall(input, start) {
   // start points at '('
   if (input[start] !== '(') return null;
   // Zero-arg form: empty parens immediately close.
   if (input[start + 1] === ')') {
-    return { value: '', end: start + 2 };
+    return { kind: 'empty', value: '', end: start + 2 };
   }
   NUM_INDEX.lastIndex = start + 1;
   const nm = NUM_INDEX.exec(input);
   if (nm && nm.index === start + 1) {
     const after = start + 1 + nm[0].length;
     if (input[after] !== ')') return null;
-    return { value: nm[0], end: after + 1 };
+    return { kind: 'num', value: nm[0], end: after + 1 };
   }
   STR_INDEX_SINGLE.lastIndex = start + 1;
   const sm1 = STR_INDEX_SINGLE.exec(input);
   if (sm1 && sm1.index === start + 1) {
     const after = start + 1 + sm1[0].length;
     if (input[after] !== ')') return null;
-    return { value: sm1[0].slice(1, -1), end: after + 1 };
+    return { kind: 'str', value: sm1[0].slice(1, -1), end: after + 1 };
   }
   STR_INDEX_DOUBLE.lastIndex = start + 1;
   const sm2 = STR_INDEX_DOUBLE.exec(input);
   if (sm2 && sm2.index === start + 1) {
     const after = start + 1 + sm2[0].length;
     if (input[after] !== ')') return null;
-    return { value: sm2[0].slice(1, -1), end: after + 1 };
+    return { kind: 'str', value: sm2[0].slice(1, -1), end: after + 1 };
   }
   return null;
 }
