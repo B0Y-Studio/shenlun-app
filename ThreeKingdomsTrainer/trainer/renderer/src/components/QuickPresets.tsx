@@ -34,6 +34,35 @@ const FACTION_PRESETS = (fid: string) => ([
   { label: 'Reputation → 99', path: `${ROOT}.world.factions.get("${fid}").reputation`, value: '99' },
 ]);
 
+// ── editable city row ─────────────────────────────────────────────────────
+function TableRow({ city, onApply }: { city: CityRow; onApply: (inf: number, arch: number, cav: number) => void }) {
+  const [i, setI] = useState(String(city.infantry));
+  const [a, setA] = useState(String(city.archer));
+  const [c, setC] = useState(String(city.cavalry));
+
+  // Keep inputs in sync when city data refreshes
+  useEffect(() => {
+    setI(String(city.infantry));
+    setA(String(city.archer));
+    setC(String(city.cavalry));
+  }, [city.infantry, city.archer, city.cavalry]);
+
+  const toN = (s: string) => { const n = parseInt(s, 10); return isNaN(n) ? 0 : n; };
+
+  return (
+    <tr key={city.id}>
+      <td>{city.id}</td>
+      <td>{(city.population / 1000).toFixed(1)}k</td>
+      <td>{city.economy}</td>
+      <td>{city.soldiers}</td>
+      <td><input className="tb-inp" value={i} onChange={(e) => setI(e.target.value)} /></td>
+      <td><input className="tb-inp" value={a} onChange={(e) => setA(e.target.value)} /></td>
+      <td><input className="tb-inp" value={c} onChange={(e) => setC(e.target.value)} /></td>
+      <td><button className="tbl-btn" onClick={() => onApply(toN(i), toN(a), toN(c))}>Set</button></td>
+    </tr>
+  );
+}
+
 // ── component ──────────────────────────────────────────────────────────────
 export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: Props) {
   const [factions, setFactions] = useState<FactionInfo[]>([]);
@@ -155,34 +184,12 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
               <tr>
                 <th>#</th><th>Pop</th><th>Econ</th><th>Soldiers</th>
                 <th>Infantry</th><th>Archer</th><th>Cavalry</th>
-                <th title="Apply">+100</th><th title="Apply">Max</th>
+                <th>Set</th>
               </tr>
             </thead>
             <tbody>
               {playerCities.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.id}</td>
-                  <td>{(c.population / 1000).toFixed(1)}k</td>
-                  <td>{c.economy}</td>
-                  <td>{c.soldiers}</td>
-                  <td>{c.infantry}</td>
-                  <td>{c.archer}</td>
-                  <td>{c.cavalry}</td>
-                  <td>
-                    <button
-                      className="tbl-btn"
-                      title="Add 100 to each troop type + soldiers"
-                      onClick={() => applyTroops(c.id, c.infantry + 100, c.archer + 100, c.cavalry + 100)}
-                    >+100</button>
-                  </td>
-                  <td>
-                    <button
-                      className="tbl-btn"
-                      title="Set all troops to 99999"
-                      onClick={() => applyTroops(c.id, 99999, 99999, 99999)}
-                    >Max</button>
-                  </td>
-                </tr>
+                <TableRow key={c.id} city={c} onApply={(inf, arch, cav) => applyTroops(c.id, inf, arch, cav)} />
               ))}
             </tbody>
           </table>

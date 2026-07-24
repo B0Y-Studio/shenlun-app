@@ -170,6 +170,22 @@ html, body, #root {
   background: #e8f4fd;
 }
 
+.tb-inp {
+  width: 52px;
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.tb-inp:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 1px rgba(0,122,255,0.2);
+}
+
 .history {
   width: 100%;
   border-collapse: collapse;
