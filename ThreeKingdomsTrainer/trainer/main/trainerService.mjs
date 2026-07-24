@@ -34,8 +34,18 @@ export class TrainerService {
   }
 
   async ensureHelpersInjected() {
+    // 1) Register the source so future documents (route changes, reloads)
+    //    also have the helpers wired up. Page.addScriptToEvaluateOnNewDocument
+    //    only runs the source on subsequent document creation — it does NOT
+    //    execute against the already-loaded page.
     await this.cdp.injectOnNewDocument(SAFE_READ_SOURCE);
     await this.cdp.injectOnNewDocument(SAFE_WRITE_SOURCE);
+    // 2) Also evaluate the source *now* via Runtime.evaluate so the
+    //    currently-loaded page has `window.__trainerSafeRead` etc. defined.
+    //    Page.addScriptToEvaluateOnNewDocument alone is insufficient
+    //    because the game was already running before connect.
+    await this.cdp.eval(SAFE_READ_SOURCE);
+    await this.cdp.eval(SAFE_WRITE_SOURCE);
   }
 
   /** Read a path. Returns the raw value from `eval` (already JSON-friendly
