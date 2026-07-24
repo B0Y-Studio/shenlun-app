@@ -34,8 +34,8 @@ const SCAN_EXPR = `(function(){
     if (ctorName === 'Map') {
       var sample = Array.from(v.keys()).slice(0, 3).map(function(k){ return String(k); }).join(',');
       hits.push(path + ' (Map size=' + v.size + ' sample=' + sample + ')');
-      // v1.1: also peek at the first Map entry's numeric fields, since that's
-      // where the trainer will read/apply values next.
+      // v1.1: peek into the first Map entry's numeric fields (already what
+      // the trainer will read/apply).
       var firstKey = v.keys().next().value;
       if (firstKey !== undefined) {
         var firstVal = v.get(firstKey);
@@ -48,6 +48,20 @@ const SCAN_EXPR = `(function(){
             var fv = firstVal[fk];
             if (typeof fv === 'number' || typeof fv === 'string' || typeof fv === 'boolean') {
               hits.push(path + '.get(' + JSON.stringify(String(firstKey)) + ').' + fk + '=' + String(fv));
+            }
+          }
+          // v1.1: for the factions map specifically, dump each entry's
+          // name + leaderId + gold/food so the trainer user can identify
+          // their own faction at a glance.
+          if (path.indexOf('factions') !== -1) {
+            var fkeys = Array.from(v.keys());
+            for (var f = 0; f < fkeys.length && f < 25; f++) {
+              var fk = fkeys[f];
+              var fv = v.get(fk);
+              var nm = (fv && (fv.name || fv.displayName || fv.shortName)) || '?';
+              var lid = (fv && fv.leaderId) || '?';
+              hits.push(path + '.get(' + JSON.stringify(String(fk)) + ')  name=' + nm + '  leaderId=' + lid +
+                         '  gold=' + String(fv.gold) + '  food=' + String(fv.food));
             }
           }
         }
