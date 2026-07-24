@@ -57,6 +57,13 @@ export interface Article {
   id: string; chapter: string; title: string; date: string; content: string;
   highlight?: string; source: string; author: string; theme: string;
   tags?: string[];   // 复盘屏按主题分组、ReviewScreen tag chip 点击跳转素材 Tab 用
+  /**
+   * 服务端规范化后的标题（用于 markReadRemote 关联服务端 analytics）。
+   * - 服务端响应（/api/today, /api/articles, /api/article/:id）都回传此字段，正常 ≥ 1 字符
+   * - 离线缓存中可能为空字符串（升级前写的老 cache 没存 norm）
+   *   这种情况 markReadRemote 会 early-return false（不会报错），只是该次已读不参与服务端聚合
+   */
+  norm?: string;
 }
 
 export interface Note {

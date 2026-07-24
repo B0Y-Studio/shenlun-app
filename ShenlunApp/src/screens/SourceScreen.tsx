@@ -3,7 +3,10 @@
 // 数据源：服务端 POST /api/articles（带过滤）
 // 离线降级：服务端失败时返回 MMKV 缓存
 // 跳转协议：从 ReviewScreen 点 tag chip → tabBus.set('source', { filter: { theme } }) 预填主题
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+//   presetThemeRef 用 useRef 在挂载时一次性快照 activeFilter?.theme，
+//   不随后续 activeFilter 变化而更新（避免后续切换 filter 覆盖当前数据）；
+//   前提：SourceScreen 在 Tab 切换期间保持挂载（React Navigation 默认行为）。
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -67,10 +70,14 @@ export default function SourceScreen() {
   const nav = useNavigation<NavProp>();
   const activeFilter = useActiveFilter();
 
-  const [mode, setMode] = useState<Mode>('theme');
-  const [activeGroup, setActiveGroup] = useState<string | null>(
+  // 记录 tabBus 预填的 theme（只取一次，挂载后不应跟随 activeFilter 变化被覆盖）
+  const presetThemeRef = useRef<string | null>(
     (activeFilter?.theme as string) ?? null
   );
+
+  const [mode, setMode] = useState<Mode>('theme');
+  // 初始 activeGroup 来自 presetTheme，让"全部"chip 之外的初始选中态正确
+  const [activeGroup, setActiveGroup] = useState<string | null>(presetThemeRef.current);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
@@ -99,12 +106,17 @@ export default function SourceScreen() {
     }
   }, [mode, activeGroup]);
 
-  // 首次加载：服务端 /api/articles 不带过滤拿首页 100 条 + 总量
+  // 首次加载：从 ReviewScreen tag chip 跳过来时按 preset theme 过滤（tap chip 路径）
+  // 没有 preset 时保持原来"全部"语义
+  // 使用 presetThemeRef 避免被后续 activeFilter 变化干扰（用 ref 一次性快照）
   useEffect(() => {
     (async () => {
       setLoading(true);
+      const preset = presetThemeRef.current;
+      const opts: Parameters<typeof getArticles>[0] = { pageSize: 100, with_summary: true };
+      if (preset) opts.theme = preset;
       try {
-        const resp = await getArticles({ pageSize: 100, with_summary: true });
+        const resp = await getArticles(opts);
         setArticles(resp.items);
         setTotal(resp.total);
         setOnline(resp.online);

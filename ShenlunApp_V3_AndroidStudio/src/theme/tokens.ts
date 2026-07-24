@@ -46,9 +46,12 @@ export const fonts = {
     bold:    'SourceHanSerifCN-Bold',
     heavy:   'SourceHanSerifCN-Heavy',
   },
+  // 楷体：未打包字体文件，Android 会回退到系统默认。
+  // 临时方案：让 kai 与 serif 同源（视觉接近宋体），保证不崩溃也不误导。
+  // TODO: 打包 KaiTi.otf / KaiTi-Bold.otf 后恢复 'KaiTi' / 'KaiTi-Bold'
   kai: {
-    regular: 'KaiTi',
-    bold:    'KaiTi-Bold',
+    regular: 'SourceHanSerifCN-Regular',
+    bold:    'SourceHanSerifCN-Bold',
   },
   sans: {
     regular: 'PingFangSC-Regular',

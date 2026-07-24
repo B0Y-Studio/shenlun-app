@@ -1,7 +1,7 @@
 // src/screens/ReaderScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { getArticle, type Article } from '../api/client';
+import { getArticle, postNote, markReadRemote, type Article } from '../api/client';
 import { getCachedArticles, markRead } from '../storage/mmkv';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -27,6 +27,9 @@ export default function ReaderScreen(props: Props) {
   const t = theme.tokens;
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
+  const [marking, setMarking] = useState(false);
+  // 当前 article 在今日 articles 列表中的位置 + 总数（用于底部"第 X / Y 篇"）
+  const [progress, setProgress] = useState<{ index: number; total: number } | null>(null);
 
   useEffect(() => {
     // 守卫 route.params.id（类型上已是非空，但运行时仍可能缺失）
@@ -40,10 +43,21 @@ export default function ReaderScreen(props: Props) {
     let cancelled = false;
     // 进入阅读页即把当前 id 标为已读，回到首页时会显示计数
     markRead(id);
+    // 同步已读到服务端（用于多设备同步 + 服务端 /api/analytics 聚合）
+    // 从缓存拿 article metadata（如果有），否则用最小字段
+    const meta = getCachedArticles().find(a => a.id === safeId);
+    if (meta) markReadRemote(meta);
+    else markReadRemote({ id: safeId, chapter: '', title: '', date: '', content: '', source: '', author: '', theme: '', tags: [] });
 
     // Cache-first: 文章正文已在 /api/today 响应里带过来了，优先用缓存，避免多余网络请求。
     // 若缓存缺失（如冷启动且未联网），再回退到 getArticle。
-    const cached = getCachedArticles().find(a => a.id === safeId);
+    const cachedList = getCachedArticles();
+    const cached = cachedList.find(a => a.id === safeId);
+    // 计算当前位置：1-based
+    const idx = cachedList.findIndex(a => a.id === safeId);
+    if (idx >= 0) {
+      setProgress({ index: idx + 1, total: cachedList.length });
+    }
     if (cached) {
       setArticle(cached);
       setLoading(false);
@@ -124,9 +138,35 @@ export default function ReaderScreen(props: Props) {
 
       {/* 底部工具栏 */}
       <View style={[styles.bottomBar, { backgroundColor: t.paper, borderTopColor: t.border }]}>
-        <Text style={[styles.progress, { color: t.inkMuted }]}>第 1 / 3 篇</Text>
-        <Pressable style={[styles.markBtn, { backgroundColor: t.seal }]}>
-          <Text style={[styles.markBtnText, { color: t.paper }]}>标记金句</Text>
+        <Text style={[styles.progress, { color: t.inkMuted }]}>
+          {progress ? `第 ${progress.index} / ${progress.total} 篇` : '— / —'}
+        </Text>
+        <Pressable
+          style={[styles.markBtn, { backgroundColor: marking ? t.sealDeep : t.seal }]}
+          disabled={marking || !article}
+          onPress={async () => {
+            if (!article || marking) return;
+            setMarking(true);
+            try {
+              await postNote({
+                article_id: article.id,
+                sentence: article.highlight || article.content.slice(0, 80),
+                article_title: article.title,
+                theme: article.tags?.[0],
+                created_at: new Date().toISOString(),
+              });
+            } catch {
+              // 静默失败：标记金句失败不影响阅读体验
+            } finally {
+              setMarking(false);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="标记金句"
+        >
+          <Text style={[styles.markBtnText, { color: t.paper }]}>
+            {marking ? '标记中…' : '标记金句'}
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>

@@ -3,7 +3,15 @@
 """
 HTTP 服务：手机访问 http://本机IP:8080
 - 仅用 Python 标准库
-- 支持今日3篇、已读标记、金句收藏、笔记
+- GET  /api/today                 今日 3 篇（按设备排重）
+- GET  /api/card?norm=xxx         单篇 HTML
+- GET/POST /api/articles          全量素材库分页查询（theme/source/date/q/page/pageSize）
+- GET  /api/article/<id>          单篇详情（body_html + summary）
+- GET  /api/stats|history|highlights  用户行为记录（按 device_id）
+- GET  /api/analytics/summary     学习概览 + 主题/来源/月份分布
+- GET  /api/analytics/themes?top=N 高频主题 Top N
+- POST /api/mark-read|highlight|note|skip  写入用户行为
+- POST /api/articles              全量素材库 JSON body 入口（避免 URL 编码）
 """
 import os
 import re
@@ -75,14 +83,26 @@ class CardHandler(BaseHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             self._send(200, get_card_body(qs.get('norm', [''])[0]), 'application/json')
         elif path == '/api/stats':
-            self._send(200, get_stats(), 'application/json')
+            qs = parse_qs(urlparse(self.path).query)
+            self._send(200, get_stats(qs), 'application/json')
         elif path == '/api/history':
-            self._send(200, get_history(), 'application/json')
+            qs = parse_qs(urlparse(self.path).query)
+            self._send(200, get_history(qs), 'application/json')
         elif path == '/api/highlights':
-            self._send(200, get_highlights(), 'application/json')
+            qs = parse_qs(urlparse(self.path).query)
+            self._send(200, get_highlights(qs), 'application/json')
         elif path == '/api/articles':
             qs = parse_qs(urlparse(self.path).query)
             self._send(200, list_articles(qs), 'application/json')
+        elif path.startswith('/api/article/'):
+            article_id = path[len('/api/article/'):]
+            self._send(200, get_article_by_id(article_id), 'application/json')
+        elif path == '/api/analytics/summary':
+            qs = parse_qs(urlparse(self.path).query)
+            self._send(200, get_analytics_summary(qs), 'application/json')
+        elif path == '/api/analytics/themes':
+            qs = parse_qs(urlparse(self.path).query)
+            self._send(200, get_analytics_themes(qs), 'application/json')
         else:
             self._send(404, 'Not Found')
 
@@ -139,9 +159,13 @@ def scan_shiping_articles():
         if age < CACHE_TTL:
             try:
                 with open(CACHE_PATH, 'rb') as f:
-                    return pickle.load(f)
+                    cached = pickle.load(f)
+                # 兼容老 pickle（无 summary 字段），强制重新扫描
+                if cached and isinstance(cached, list) and 'summary' in cached[0]:
+                    return cached
             except:
                 pass
+    # 缓存不命中或格式老：执行下面全量扫描 + 写 pickle
 
     # 重新扫描
     articles = []
@@ -191,6 +215,8 @@ def scan_shiping_articles():
                     'category': category_m.group(1).strip() if category_m else '',
                     'source_type': source_type_m.group(1).strip() if source_type_m else '',
                     'month': month_m.group(1).strip() if month_m else (date[:7] if date else ''),
+                    # summary 一起 pickle，5 分钟扫描一次，list_articles 不再读盘
+                    'summary': _extract_summary(fp, max_len=160),
                 })
             except:
                 continue
@@ -345,6 +371,25 @@ def get_card_detail():
     return json.dumps({'error': 'use POST'}, ensure_ascii=False)
 
 
+def _extract_summary(file_path, max_len=160):
+    """从 markdown 文件提取摘要：去掉 frontmatter 和首行 H1"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        # 去掉 frontmatter
+        content = re.sub(r'^---.*?---\n', '', content, count=1, flags=re.DOTALL)
+        # 去掉首行 H1
+        content = re.sub(r'^#\s+.*?\n', '', content, count=1, flags=re.MULTILINE)
+        # 去掉 markdown 标记（保留纯文本预览）
+        content = re.sub(r'[*_`>#~\-\[\]\(\)]', '', content)
+        content = re.sub(r'\s+', ' ', content).strip()
+        if len(content) > max_len:
+            content = content[:max_len] + '…'
+        return content
+    except Exception:
+        return ''
+
+
 def list_articles(qs):
     """
     全量素材库列表：?theme= &source= &date= &q= &page= &pageSize=
@@ -355,6 +400,7 @@ def list_articles(qs):
         source = (qs.get('source', [''])[0] or '').strip()
         date = (qs.get('date', [''])[0] or '').strip()    # YYYY / YYYY-MM / YYYY-MM-DD
         q = (qs.get('q', [''])[0] or '').strip()
+        with_summary = (qs.get('with_summary', ['0'])[0] or '0') == '1'
         try:
             page = max(1, int(qs.get('page', ['1'])[0]))
         except Exception:
@@ -399,7 +445,7 @@ def list_articles(qs):
         items = []
         for a in page_items:
             fp = a.get('file_path', '').replace('\\', '/')
-            items.append({
+            item = {
                 'id': fp,
                 'norm': a['norm'],
                 'title': a['title'],
@@ -412,7 +458,11 @@ def list_articles(qs):
                 'month': a.get('month', ''),
                 'url': a.get('url', ''),
                 'file_path': fp,
-            })
+            }
+            if with_summary:
+                # 5 分钟扫描里已经 pickle 了 summary，直接取，避免每次 list_articles 读 100 文件
+                item['summary'] = a.get('summary') or _extract_summary(fp)
+            items.append(item)
 
         themes_sorted = sorted(theme_counter.items(), key=lambda x: -x[1])
         sources_sorted = sorted(source_counter.items(), key=lambda x: -x[1])
@@ -429,6 +479,65 @@ def list_articles(qs):
         }, ensure_ascii=False)
     except Exception as e:
         return json.dumps({'error': str(e), 'items': [], 'total': 0}, ensure_ascii=False)
+
+
+def get_article_by_id(article_id):
+    """按 file_path 取单篇（含 body HTML）"""
+    if not article_id:
+        return json.dumps({'error': 'missing id'}, ensure_ascii=False)
+    # URL 反编码 + 统一正斜杠
+    from urllib.parse import unquote
+    article_id = unquote(article_id).replace('\\', '/')
+    all_articles = scan_shiping_articles()
+    target = None
+    for a in all_articles:
+        if a.get('file_path', '').replace('\\', '/') == article_id:
+            target = a
+            break
+    if not target:
+        return json.dumps({'error': 'not found', 'id': article_id}, ensure_ascii=False)
+    fp = target['file_path']
+    try:
+        with open(fp, 'r', encoding='utf-8') as f:
+            content = f.read()
+        # 复刻 get_card_body 的 HTML 渲染
+        body = re.sub(r'^---.*?---\n', '', content, count=1, flags=re.DOTALL)
+        body = re.sub(r'^#\s+.*?\n', '', body, count=1, flags=re.MULTILINE)
+        html = ''
+        for line in body.split('\n'):
+            line = line.rstrip()
+            if not line:
+                html += '<p>&nbsp;</p>'
+                continue
+            if line.startswith('**') and line.endswith('**'):
+                html += f'<p><strong>{line.strip("*").strip()}</strong></p>'
+            elif line.startswith('>'):
+                html += f'<blockquote style="border-left:3px solid #d30000;padding:8px 12px;color:#515154;background:#fff8f8;margin:8px 0">{line.lstrip("> ").strip()}</blockquote>'
+            elif line.startswith('- '):
+                html += f'<p>• {line[2:]}</p>'
+            elif line.startswith('---'):
+                html += '<hr style="border:none;border-top:1px dashed #d1d1d6;margin:16px 0">'
+            else:
+                escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                html += f'<p>{escaped}</p>'
+        return json.dumps({
+            'id': article_id,
+            'norm': target['norm'],
+            'title': target['title'],
+            'date': target.get('date', ''),
+            'source': target.get('source', ''),
+            'author': target.get('author', ''),
+            'tags': target.get('tags', []),
+            'category': target.get('category', ''),
+            'source_type': target.get('source_type', ''),
+            'month': target.get('month', ''),
+            'url': target.get('url', ''),
+            'body_html': html,
+            # 详情用更长 summary（240），优先用 pickle，缺失时再生成
+            'summary': target.get('summary') or _extract_summary(fp, max_len=160),
+        }, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({'error': str(e), 'id': article_id}, ensure_ascii=False)
 
 
 def get_card_body(norm):
@@ -485,43 +594,214 @@ def _extract_title(content):
     return t.group(1).strip() if t else ''
 
 
-def get_stats():
+def get_stats(qs=None):
+    qs = qs or {}
+    device_id = (qs.get('device_id', [''])[0] or '').strip()
     conn = get_conn()
     today = datetime.now().strftime("%Y-%m-%d")
     seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-    cur = conn.execute('SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?', (today,))
+    thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    def where_device():
+        return ' AND device_id = ?' if device_id else ''
+    params = (device_id,) if device_id else ()
+
+    cur = conn.execute(
+        f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{where_device()}',
+        (today, *params)
+    )
     today_reads = cur.fetchone()['c']
-    cur = conn.execute('SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?', (seven_days_ago,))
+    cur = conn.execute(
+        f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{where_device()}',
+        (seven_days_ago, *params)
+    )
     week_reads = cur.fetchone()['c']
-    cur = conn.execute('SELECT COUNT(*) as c FROM highlights')
+    cur = conn.execute(
+        f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{where_device()}',
+        (thirty_days_ago, *params)
+    )
+    month_reads = cur.fetchone()['c']
+    cur = conn.execute(
+        f'SELECT COUNT(DISTINCT norm_title) as c FROM reads{(" WHERE device_id = ?" if device_id else "")}',
+        params
+    )
+    total_reads = cur.fetchone()['c']
+
+    hl_where = ' WHERE device_id = ?' if device_id else ''
+    cur = conn.execute(f'SELECT COUNT(*) as c FROM highlights{hl_where}', params)
     total_highlights = cur.fetchone()['c']
-    cur = conn.execute('SELECT COUNT(*) as c FROM notes')
+    cur = conn.execute(f'SELECT COUNT(*) as c FROM notes{hl_where}', params)
     total_notes = cur.fetchone()['c']
+
     return json.dumps({
         'today_reads': today_reads,
         'week_reads': week_reads,
+        'month_reads': month_reads,
+        'total_reads': total_reads,
         'total_highlights': total_highlights,
         'total_notes': total_notes,
+        'device_id': device_id,
     }, ensure_ascii=False)
 
 
-def get_history():
+def get_history(qs=None):
+    qs = qs or {}
+    device_id = (qs.get('device_id', [''])[0] or '').strip()
+    try:
+        limit = max(1, min(200, int(qs.get('limit', ['50'])[0])))
+    except Exception:
+        limit = 50
     conn = get_conn()
-    cur = conn.execute(
-        'SELECT title, date, read_at FROM reads ORDER BY read_at DESC LIMIT 50'
-    )
+    if device_id:
+        cur = conn.execute(
+            'SELECT title, date, read_at, file_path FROM reads WHERE device_id = ? ORDER BY read_at DESC LIMIT ?',
+            (device_id, limit)
+        )
+    else:
+        cur = conn.execute(
+            'SELECT title, date, read_at, file_path FROM reads ORDER BY read_at DESC LIMIT ?',
+            (limit,)
+        )
     return json.dumps({
-        'history': [dict(row) for row in cur.fetchall()]
+        'history': [dict(row) for row in cur.fetchall()],
+        'device_id': device_id,
     }, ensure_ascii=False)
 
 
-def get_highlights():
+def get_highlights(qs=None):
+    qs = qs or {}
+    device_id = (qs.get('device_id', [''])[0] or '').strip()
+    try:
+        limit = max(1, min(500, int(qs.get('limit', ['100'])[0])))
+    except Exception:
+        limit = 100
     conn = get_conn()
-    cur = conn.execute(
-        'SELECT title, content, tags, note, created_at FROM highlights ORDER BY created_at DESC LIMIT 100'
-    )
+    if device_id:
+        cur = conn.execute(
+            'SELECT title, content, tags, note, created_at, file_path FROM highlights WHERE device_id = ? ORDER BY created_at DESC LIMIT ?',
+            (device_id, limit)
+        )
+    else:
+        cur = conn.execute(
+            'SELECT title, content, tags, note, created_at, file_path FROM highlights ORDER BY created_at DESC LIMIT ?',
+            (limit,)
+        )
     return json.dumps({
-        'highlights': [dict(row) for row in cur.fetchall()]
+        'highlights': [dict(row) for row in cur.fetchall()],
+        'device_id': device_id,
+    }, ensure_ascii=False)
+
+
+def get_analytics_summary(qs=None):
+    """
+    学习概览：device 级 / 全局
+    返回 { month_reads, total_reads, today_reads, week_reads,
+           themes: [{key, count}], sources: [{key, count}], dates: [{key, count}] }
+    """
+    qs = qs or {}
+    device_id = (qs.get('device_id', [''])[0] or '').strip()
+    conn = get_conn()
+    today = datetime.now().strftime("%Y-%m-%d")
+    seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    def where():
+        return ' WHERE device_id = ?' if device_id else ''
+    def join_where():
+        return (' AND r.device_id = ?' if device_id else '')
+    params = (device_id,) if device_id else ()
+
+    # 阅读计数（按文件路径匹配 article tags）
+    cur = conn.execute(f'SELECT COUNT(DISTINCT norm_title) as c FROM reads{where()}', params)
+    total_reads = cur.fetchone()['c']
+    cur = conn.execute(f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{(" AND device_id = ?" if device_id else "")}', (today, *params))
+    today_reads = cur.fetchone()['c']
+    cur = conn.execute(f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{(" AND device_id = ?" if device_id else "")}', (seven_days_ago, *params))
+    week_reads = cur.fetchone()['c']
+    cur = conn.execute(f'SELECT COUNT(DISTINCT norm_title) as c FROM reads WHERE read_at >= ?{(" AND device_id = ?" if device_id else "")}', (thirty_days_ago, *params))
+    month_reads = cur.fetchone()['c']
+
+    # 聚合主题/来源/月份
+    all_articles = scan_shiping_articles()
+    norm2meta = {}
+    for a in all_articles:
+        norm2meta[a['norm']] = a
+
+    if device_id:
+        cur = conn.execute(
+            'SELECT DISTINCT norm_title, file_path FROM reads WHERE device_id = ?',
+            (device_id,)
+        )
+    else:
+        cur = conn.execute('SELECT DISTINCT norm_title, file_path FROM reads')
+    seen_norms = set([row['norm_title'] for row in cur.fetchall()])
+
+    theme_counter = {}
+    source_counter = {}
+    date_counter = {}
+    for norm in seen_norms:
+        meta = norm2meta.get(norm)
+        if not meta:
+            continue
+        for t in meta.get('tags', []):
+            theme_counter[t] = theme_counter.get(t, 0) + 1
+        s = meta.get('source') or '未署名'
+        source_counter[s] = source_counter.get(s, 0) + 1
+        m = meta.get('month') or (meta.get('date', '')[:7] if meta.get('date') else '') or '未知月份'
+        date_counter[m] = date_counter.get(m, 0) + 1
+
+    themes_sorted = sorted(theme_counter.items(), key=lambda x: -x[1])
+    sources_sorted = sorted(source_counter.items(), key=lambda x: -x[1])
+    dates_sorted = sorted(date_counter.items(), key=lambda x: x[0], reverse=True)
+
+    return json.dumps({
+        'device_id': device_id,
+        'total_reads': total_reads,
+        'today_reads': today_reads,
+        'week_reads': week_reads,
+        'month_reads': month_reads,
+        'themes': [{'key': k, 'count': v} for k, v in themes_sorted],
+        'sources': [{'key': k, 'count': v} for k, v in sources_sorted],
+        'dates': [{'key': k, 'count': v} for k, v in dates_sorted],
+    }, ensure_ascii=False)
+
+
+def get_analytics_themes(qs=None):
+    """
+    高频主题 Top N（按 device 维度）
+    ?device_id=&top=10
+    """
+    qs = qs or {}
+    device_id = (qs.get('device_id', [''])[0] or '').strip()
+    try:
+        top = max(1, min(50, int(qs.get('top', ['10'])[0])))
+    except Exception:
+        top = 10
+    conn = get_conn()
+    if device_id:
+        cur = conn.execute(
+            'SELECT DISTINCT norm_title FROM reads WHERE device_id = ?',
+            (device_id,)
+        )
+    else:
+        cur = conn.execute('SELECT DISTINCT norm_title FROM reads')
+    seen = set([r['norm_title'] for r in cur.fetchall()])
+    if not seen:
+        return json.dumps({'device_id': device_id, 'themes': [], 'total_unique': 0}, ensure_ascii=False)
+    all_articles = scan_shiping_articles()
+    norm2meta = {a['norm']: a for a in all_articles}
+    theme_counter = {}
+    for norm in seen:
+        meta = norm2meta.get(norm)
+        if not meta:
+            continue
+        for t in meta.get('tags', []):
+            theme_counter[t] = theme_counter.get(t, 0) + 1
+    items = sorted(theme_counter.items(), key=lambda x: -x[1])[:top]
+    return json.dumps({
+        'device_id': device_id,
+        'themes': [{'key': k, 'count': v} for k, v in items],
+        'total_unique': len(seen),
     }, ensure_ascii=False)
 
 
@@ -530,14 +810,15 @@ def mark_read(data):
     title = data.get('title', '').strip()
     date = data.get('date', '').strip()
     duration = int(data.get('duration', 0))
+    device_id = data.get('device_id', '').strip()
     if not norm or not title:
         return json.dumps({'ok': False, 'error': 'missing norm/title'}, ensure_ascii=False)
     conn = get_conn()
     now = datetime.now().isoformat(timespec='seconds')
     with db_lock:
         conn.execute(
-            'INSERT INTO reads (norm_title, title, date, file_path, read_at, duration_sec) VALUES (?,?,?,?,?,?)',
-            (norm, title, date, data.get('file_path', ''), now, duration)
+            'INSERT INTO reads (device_id, norm_title, title, date, file_path, read_at, duration_sec) VALUES (?,?,?,?,?,?,?)',
+            (device_id, norm, title, date, data.get('file_path', ''), now, duration)
         )
         conn.commit()
     return json.dumps({'ok': True}, ensure_ascii=False)
@@ -549,14 +830,15 @@ def save_highlight(data):
     content = data.get('content', '').strip()
     tags = data.get('tags', '')
     note = data.get('note', '')
+    device_id = data.get('device_id', '').strip()
     if not norm or not content:
         return json.dumps({'ok': False, 'error': 'missing norm/content'}, ensure_ascii=False)
     conn = get_conn()
     now = datetime.now().isoformat(timespec='seconds')
     with db_lock:
         conn.execute(
-            'INSERT INTO highlights (norm_title, title, content, tags, note, created_at) VALUES (?,?,?,?,?,?)',
-            (norm, title, content, tags, note, now)
+            'INSERT INTO highlights (device_id, norm_title, title, content, tags, note, created_at) VALUES (?,?,?,?,?,?,?)',
+            (device_id, norm, title, content, tags, note, now)
         )
         conn.commit()
     return json.dumps({'ok': True}, ensure_ascii=False)
@@ -566,14 +848,15 @@ def save_note(data):
     norm = data.get('norm', '').strip()
     title = data.get('title', '').strip()
     content = data.get('content', '').strip()
+    device_id = data.get('device_id', '').strip()
     if not norm or not content:
         return json.dumps({'ok': False, 'error': 'missing norm/content'}, ensure_ascii=False)
     conn = get_conn()
     now = datetime.now().isoformat(timespec='seconds')
     with db_lock:
         conn.execute(
-            'INSERT INTO notes (norm_title, title, content, created_at) VALUES (?,?,?,?)',
-            (norm, title, content, now)
+            'INSERT INTO notes (device_id, norm_title, title, content, created_at) VALUES (?,?,?,?,?)',
+            (device_id, norm, title, content, now)
         )
         conn.commit()
     return json.dumps({'ok': True}, ensure_ascii=False)
@@ -974,19 +1257,35 @@ if __name__ == "__main__":
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''CREATE TABLE IF NOT EXISTS reads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT,
         norm_title TEXT NOT NULL, title TEXT NOT NULL, date TEXT,
         file_path TEXT, read_at TEXT NOT NULL, duration_sec INTEGER DEFAULT 0
     )''')
+    # 兼容老库：尝试加 device_id 列
+    try:
+        conn.execute('ALTER TABLE reads ADD COLUMN device_id TEXT')
+    except Exception:
+        pass
     conn.execute('''CREATE TABLE IF NOT EXISTS highlights (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT,
         norm_title TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL,
         tags TEXT, note TEXT, created_at TEXT NOT NULL
     )''')
+    try:
+        conn.execute('ALTER TABLE highlights ADD COLUMN device_id TEXT')
+    except Exception:
+        pass
     conn.execute('''CREATE TABLE IF NOT EXISTS notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT,
         norm_title TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL,
         created_at TEXT NOT NULL
     )''')
+    try:
+        conn.execute('ALTER TABLE notes ADD COLUMN device_id TEXT')
+    except Exception:
+        pass
     conn.execute('''CREATE TABLE IF NOT EXISTS skips (
         norm_title TEXT PRIMARY KEY
     )''')
