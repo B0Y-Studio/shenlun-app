@@ -32,5 +32,6 @@ contextBridge.exposeInMainWorld('trainer', {
 
   scanCities: () => ipcRenderer.invoke('trainer:scanCities'),
   scanFactions: () => ipcRenderer.invoke('trainer:scanFactions'),
+  setAllOfficerRep: ({ factionId, value }: { factionId: string; value: number }) => ipcRenderer.invoke('trainer:setAllOfficerRep', { factionId, value }),
   quit: () => ipcRenderer.invoke(channels.quit),
 });

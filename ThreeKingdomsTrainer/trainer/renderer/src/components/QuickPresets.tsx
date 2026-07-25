@@ -31,7 +31,6 @@ const ROOT = 'EconomyEngine.getInstance()';
 const FACTION_PRESETS = (fid: string) => ([
   { label: 'Gold → 999999', path: `${ROOT}.world.factions.get("${fid}").gold`, value: '999999' },
   { label: 'Food → 99999',  path: `${ROOT}.world.factions.get("${fid}").food`, value: '99999' },
-  { label: 'Reputation → 99', path: `${ROOT}.world.factions.get("${fid}").reputation`, value: '99' },
 ]);
 
 // ── editable city row ─────────────────────────────────────────────────────
@@ -168,11 +167,23 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
             </select>
           </label>
           {selectedFactionId && (
-            <div className="row">
-              {FACTION_PRESETS(selectedFactionId).map((p) => (
-                <button key={p.path} title={`${p.path} = ${p.value}`} onClick={() => doApply(p.path, p.value)}>{p.label}</button>
-              ))}
-            </div>
+            <>
+              <div className="row">
+                {FACTION_PRESETS(selectedFactionId).map((p) => (
+                  <button key={p.path} title={`${p.path} = ${p.value}`} onClick={() => doApply(p.path, p.value)}>{p.label}</button>
+                ))}
+              </div>
+              <div className="row">
+                <button
+                  title="Sets all officers in this faction to reputation 100 (max). Faction reputation is average of all officer reputations."
+                  onClick={async () => {
+                    const r = await bridge.setAllOfficerRep({ factionId: selectedFactionId, value: 100 });
+                    if (!r.ok) { setError(r.error ?? 'apply failed'); }
+                    else { setError(`Set ${r.total} officers to rep 100. Faction rep now: ${r.newFacRep}`); scanCities(); }
+                  }}
+                >Reputation (all officers → 100)</button>
+              </div>
+            </>
           )}
         </>
       )}

@@ -193,6 +193,22 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('trainer:setAllOfficerRep', async (_e, { factionId, value }) => {
+    if (!service) return { ok: false, error: 'game-not-running' };
+    try {
+      const result = await cdp.eval(`(function(){
+        var w = EconomyEngine.getInstance().world;
+        var officers = Array.from(w.officers.entries()).filter(function(e){return e[1].faction==="${factionId}";});
+        for (var i=0;i<officers.length;i++) { w.setOfficerReputation(officers[i][0], ${value}, "trainer"); }
+        return JSON.stringify({total: officers.length, newFacRep: w.factions.get("${factionId}").reputation});
+      })()`);
+      const parsed = JSON.parse(result);
+      return { ok: true, total: parsed.total, newFacRep: parsed.newFacRep };
+    } catch (e) {
+      return { ok: false, error: String(e?.message ?? e) };
+    }
+  });
+
   ipcMain.handle('trainer:quit', async () => {
     if (cdp) await cdp.close();
     app.quit();

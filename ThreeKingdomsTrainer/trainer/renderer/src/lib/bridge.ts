@@ -8,6 +8,7 @@ export const bridge = {
   runSmoke: () => window.trainer.runSmoke(),
   scanCities: () => window.trainer.scanCities(),
   scanFactions: () => window.trainer.scanFactions(),
+  setAllOfficerRep: ({ factionId, value }: { factionId: string; value: number }) => window.trainer.setAllOfficerRep({ factionId, value }),
   subscribeStatus: (cb: (s: ConnectionStatus) => void) =>
     window.trainer.subscribe('status', cb),
   quit: () => window.trainer.quit(),
