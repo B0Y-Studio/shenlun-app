@@ -200,14 +200,43 @@ function registerIpc() {
       // reputationHistory bookkeeping entirely, so we don't flood the
       // log with one entry per officer. The faction's aggregate
       // reputation (which is a derived value) still reflects the change.
+      //
+      // After the mass raw-set we append ONE summary entry to
+      // reputationHistory with source=trainer so the in-game log shows
+      // a single audit-trail line for the operation.
       const result = await cdp.eval(`(function(){
         var w = EconomyEngine.getInstance().world;
         var officers = Array.from(w.officers.entries()).filter(function(e){return e[1].faction==="${factionId}";});
-        for (var i=0;i<officers.length;i++) { officers[i][1].reputation = ${value}; }
-        return JSON.stringify({total: officers.length, newFacRep: w.factions.get("${factionId}").reputation});
+        var beforeFac = w.factions.get("${factionId}").reputation || 0;
+        var repSumBefore = 0;
+        for (var i=0;i<officers.length;i++) repSumBefore += (officers[i][1].reputation||0);
+        for (var j=0;j<officers.length;j++) { officers[j][1].reputation = ${value}; }
+        var repSumAfter = officers.length * ${value};
+        var afterFac = w.factions.get("${factionId}").reputation || 0;
+        // Append single summary history entry.
+        var h = w.reputationHistory;
+        var keys = Array.from(h.keys());
+        var nextKey = keys.length === 0 ? 0 : keys.reduce(function(a,b){return Math.max(a,b);}) + 1;
+        var gameDate = w.gameDate || {};
+        var entry = {
+          id: "rep_trainer_" + nextKey,
+          turn: gameDate.turn || 0,
+          year: gameDate.year || 0,
+          month: gameDate.month || 0,
+          officerId: null,
+          factionId: "${factionId}",
+          before: beforeFac,
+          after: afterFac,
+          delta: afterFac - beforeFac,
+          reason: "trainer_mass_set_to_" + ${value},
+          source: "trainer",
+          meta: { source: "trainer", affectedOfficers: officers.length, value: ${value} }
+        };
+        h.set(nextKey, entry);
+        return JSON.stringify({total: officers.length, repSumBefore: repSumBefore, repSumAfter: repSumAfter, beforeFac: beforeFac, afterFac: afterFac, historyKey: nextKey});
       })()`);
       const parsed = JSON.parse(result);
-      return { ok: true, total: parsed.total, newFacRep: parsed.newFacRep };
+      return { ok: true, total: parsed.total, newFacRep: parsed.afterFac, historyKey: parsed.historyKey };
     } catch (e) {
       return { ok: false, error: String(e?.message ?? e) };
     }
