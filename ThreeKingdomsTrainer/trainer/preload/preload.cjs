@@ -31,5 +31,6 @@ contextBridge.exposeInMainWorld('trainer', {
   },
 
   scanCities: () => ipcRenderer.invoke('trainer:scanCities'),
+  scanFactions: () => ipcRenderer.invoke('trainer:scanFactions'),
   quit: () => ipcRenderer.invoke(channels.quit),
 });

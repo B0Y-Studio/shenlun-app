@@ -167,6 +167,32 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('trainer:scanFactions', async () => {
+    if (!service) return { ok: false, error: 'game-not-running' };
+    try {
+      const value = await cdp.eval(`(()=>{
+        var EE = EconomyEngine.getInstance();
+        var fs = EE.world.factions;
+        var ids = Array.from(fs.keys());
+        var out = [];
+        for (var i=0;i<ids.length;i++){
+          var f = fs.get(ids[i]);
+          out.push({
+            id: String(ids[i]),
+            leaderId: f.leaderId,
+            gold: f.gold,
+            food: f.food,
+            reputation: f.reputation || 0,
+          });
+        }
+        return JSON.stringify(out);
+      })()`);
+      return { ok: true, factions: JSON.parse(value) };
+    } catch (e) {
+      return { ok: false, error: String(e?.message ?? e) };
+    }
+  });
+
   ipcMain.handle('trainer:quit', async () => {
     if (cdp) await cdp.close();
     app.quit();

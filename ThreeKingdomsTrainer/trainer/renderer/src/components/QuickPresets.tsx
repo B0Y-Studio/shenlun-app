@@ -79,20 +79,19 @@ export function QuickPresets({ connected, selectedFactionId, onSelectFaction }: 
   const [cityLoading, setCityLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── load faction list from smoke output ──────────────────────────────────
+  // ── load faction list via dedicated CDP one-shot ─────────────────────────
   const loadFactions = async () => {
     if (!connected) return;
     setLoading(true);
     setError(null);
     try {
-      const sample = await bridge.runSmoke();
-      const lines = sample.sampleHits || [];
-      const out: FactionInfo[] = [];
-      for (const line of lines) {
-        const m = line.match(/world\.factions\.get\("([^"]+)"\)\s+name=(\S+)\s+leaderId=(\S+)\s+gold=([\-\d.]+)\s+food=([\-\d.]+)/);
-        if (m) out.push({ id: m[1], gold: Number(m[4]), food: Number(m[5]) });
-      }
+      const r = await bridge.scanFactions();
+      if (!r.ok) { setError(r.error ?? 'scan failed'); return; }
+      const out = (r.factions ?? []) as FactionInfo[];
+      out.sort((a, b) => a.gold < b.gold ? 1 : -1); // richest first — usually player
       setFactions(out);
+      // Auto-select the one whose leaderId is the player's own officer id
+      // If we don't know that, just pick the first (richest)
       if (out.length > 0 && !selectedFactionId) onSelectFaction(out[0].id);
     } catch (e) {
       setError(String(e?.message ?? e));

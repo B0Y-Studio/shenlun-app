@@ -7,6 +7,7 @@ export const bridge = {
     window.trainer.inspect({ path }),
   runSmoke: () => window.trainer.runSmoke(),
   scanCities: () => window.trainer.scanCities(),
+  scanFactions: () => window.trainer.scanFactions(),
   subscribeStatus: (cb: (s: ConnectionStatus) => void) =>
     window.trainer.subscribe('status', cb),
   quit: () => window.trainer.quit(),
