@@ -196,10 +196,14 @@ function registerIpc() {
   ipcMain.handle('trainer:setAllOfficerRep', async (_e, { factionId, value }) => {
     if (!service) return { ok: false, error: 'game-not-running' };
     try {
+      // Direct raw-set: officer.reputation = X bypasses the game's
+      // reputationHistory bookkeeping entirely, so we don't flood the
+      // log with one entry per officer. The faction's aggregate
+      // reputation (which is a derived value) still reflects the change.
       const result = await cdp.eval(`(function(){
         var w = EconomyEngine.getInstance().world;
         var officers = Array.from(w.officers.entries()).filter(function(e){return e[1].faction==="${factionId}";});
-        for (var i=0;i<officers.length;i++) { w.setOfficerReputation(officers[i][0], ${value}, "trainer"); }
+        for (var i=0;i<officers.length;i++) { officers[i][1].reputation = ${value}; }
         return JSON.stringify({total: officers.length, newFacRep: w.factions.get("${factionId}").reputation});
       })()`);
       const parsed = JSON.parse(result);
