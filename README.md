@@ -70,6 +70,42 @@ APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## 调试
+
+### 白屏 / 闪退
+
+`--dev true` bundle 会让 RN bridge 试图连接 Metro dev server (`ws://10.0.2.2:8081`)，未运行 Metro 时会阻塞渲染并触发 OOM kill。**始终用 `--dev false`**。
+
+```bash
+# 1. 生成 dev=false bundle（避免 Metro dev server 阻塞）
+npm run bundle:release
+
+# 2. clean 重建（避免 APK 缓存旧 bundle）
+cd android && ./gradlew clean assembleDebug
+
+# 3. 装+启动
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.shenlunapp
+adb shell am start -n com.shenlunapp/.MainActivity
+
+# 4. 抓 logcat
+adb logcat -c
+adb logcat | grep -E "ReactNativeJS|ErrorBoundary|FATAL|com\.shenlunapp"
+```
+
+### 内存 / OOM
+
+模拟器默认 RAM 较小（~1.5GB），V3 启动时 RNScreens + SafeArea + WebView + MMKV 总占用 ~200MB 容易触发 lowmemorykiller。`HomeScreen` 已加 5s 硬超时防止 fetch 永久 hang。
+
+```bash
+# 验证 OOM
+adb logcat | grep -E "lowmemorykiller|Kill.*com.shenlunapp"
+```
+
+### 网络超时
+
+服务端不可达时 `fetch` 会一直 hang。`client.ts` 全局 fetch 目前未设超时 — 后续给 `BASE` 加 AbortController 包装。
+
 ## 字体说明
 
 工程自带 SourceHanSerifCN 4 字重 OTF 文件，路径：

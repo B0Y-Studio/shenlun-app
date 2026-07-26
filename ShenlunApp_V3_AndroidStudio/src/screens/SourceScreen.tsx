@@ -178,7 +178,7 @@ export default function SourceScreen() {
       </View>
 
       {/* 模式切换条 */}
-      <ModeTabs<Mode> value={mode} options={MODE_OPTIONS as any} onChange={onChangeMode} />
+      <ModeTabs<Mode> value={mode} options={[...MODE_OPTIONS]} onChange={onChangeMode} />
 
       {/* group 筛选 */}
       {groups.length > 0 ? (

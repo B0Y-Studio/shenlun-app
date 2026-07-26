@@ -43,16 +43,27 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    // 模拟器无网络时 fetch /api/today 会一直 hang → 堆内存被 OOM kill
+    // 加 5s 硬超时，超时后强制关闭 loading 走缓存降级
+    const HARD_TIMEOUT_MS = 5000;
+    const hardTimer = setTimeout(() => {
+      if (cancelled) return;
+      // 不阻塞 UI；articles 已经是 MMKV 缓存或 []
+      setLoading(false);
+    }, HARD_TIMEOUT_MS);
+
     (async () => {
       if (cancelled) return;
       await load();
+      if (cancelled) return;
       setReadIds(new Set(getReadIds()));
+      clearTimeout(hardTimer);
     })();
     // 从阅读页返回时也同步一次已读 id（focussed 时）
     const unsub = navigation.addListener('focus', () => {
       setReadIds(new Set(getReadIds()));
     });
-    return () => { cancelled = true; unsub(); };
+    return () => { cancelled = true; clearTimeout(hardTimer); unsub(); };
   }, [navigation, load]);
 
   const doneCount = useMemo(() => {

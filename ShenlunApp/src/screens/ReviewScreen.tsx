@@ -107,7 +107,7 @@ export default function ReviewScreen(props: Props) {
         </Text>
       </View>
 
-      <ModeTabs value={mode} options={MODE_OPTIONS as any} onChange={(k: Mode) => setMode(k)} />
+      <ModeTabs value={mode} options={[...MODE_OPTIONS]} onChange={(k: Mode) => setMode(k)} />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {loading ? (

@@ -76,15 +76,15 @@ export default function AnalysisScreen() {
 
   // 高频主题 Top 5
   const topThemes = stats.themes.slice(0, 5);
-  const maxCount = topThemes.length > 0 ? topThemes[0][1] : 1;
+  const maxCount = topThemes.length > 0 ? topThemes[0].count : 1;
 
   // 待补强：已读 1-2 篇的主题（提示用户去素材 Tab 看更多）
   const weakThemes = useMemo(() => {
     if (stats.themes.length === 0) return [];
     return stats.themes
-      .filter(([, n]) => n <= 2)
+      .filter(t => t.count <= 2)
       .slice(0, 5)
-      .map(([k]) => k);
+      .map(t => t.key);
   }, [stats]);
 
   const onJumpToSource = useCallback((key: string) => {
@@ -146,12 +146,12 @@ export default function AnalysisScreen() {
               还没有阅读记录
             </Text>
           ) : (
-            topThemes.map(([theme, n]) => {
-              const pct = n / maxCount;
+            topThemes.map((theme) => {
+              const pct = maxCount > 0 ? theme.count / maxCount : 0;
               return (
-                <View key={theme} style={styles.themeRow}>
+                <View key={theme.key} style={styles.themeRow}>
                   <Text style={[styles.themeName, { color: t.ink, fontFamily: fonts.kai.regular }]} numberOfLines={1}>
-                    {theme}
+                    {theme.key}
                   </Text>
                   <View style={[styles.barBg, { backgroundColor: t.bgAlt }]}>
                     <View style={[styles.barFg, { backgroundColor: t.seal, width: `${pct * 100}%` }]} />
