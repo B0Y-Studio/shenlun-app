@@ -30,9 +30,9 @@ export default function HomeScreen() {
   // 头部日期（公历，简化为"X月/日"表示；以后可换真农历）
   const headerDate = useMemo(() => buildHeaderDate(new Date()), []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await getDaily();
+      const data = await getDaily({ signal });
       setArticles(data);
     } catch {
       setArticles([]);
@@ -43,16 +43,39 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    // 模拟器无网络/服务端慢时 fetch /api/today 可能长时间 hang：
+    //   - 用户体验：loading 一直转，看不到内容
+    //   - 资源：与 RNScreens/SafeArea 叠加可能放大启动期内存峰值
+    // 加 5s 硬超时，超时后强制关闭 loading。
+    // 注意：超时分支本身不读取 MMKV 缓存（缓存降级由 load() 内部 try/catch 处理），
+    //       状态中的 articles 仍是 useState 初值 []。
+    const HARD_TIMEOUT_MS = 5000;
+    // 用 AbortController 真正取消 fetch（避免网络恢复后 stale write）
+    const controller = new AbortController();
+    const hardTimer = setTimeout(() => {
+      if (cancelled) return;
+      // 不阻塞 UI；articles 已经是 MMKV 缓存或 []
+      controller.abort();           // 让挂着的 fetch 抛 AbortError
+      setLoading(false);
+    }, HARD_TIMEOUT_MS);
+
     (async () => {
       if (cancelled) return;
-      await load();
+      await load(controller.signal);
+      if (cancelled) return;
       setReadIds(new Set(getReadIds()));
+      clearTimeout(hardTimer);
     })();
     // 从阅读页返回时也同步一次已读 id（focussed 时）
     const unsub = navigation.addListener('focus', () => {
       setReadIds(new Set(getReadIds()));
     });
-    return () => { cancelled = true; unsub(); };
+    return () => {
+      cancelled = true;
+      clearTimeout(hardTimer);
+      controller.abort();             // 卸载/重挂载时也取消
+      unsub();
+    };
   }, [navigation, load]);
 
   const doneCount = useMemo(() => {

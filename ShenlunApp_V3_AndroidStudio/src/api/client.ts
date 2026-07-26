@@ -6,9 +6,9 @@ const BASE = 'http://124.223.5.144';
 
 function deviceId(): string { return getDeviceId(); }
 
-export async function getDaily(): Promise<Article[]> {
+export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<Article[]> {
   try {
-    const res = await fetch(`${BASE}/api/today?device_id=${deviceId()}`);
+    const res = await fetch(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     // /api/today 返回: { date, count, cards: [{ id, norm, title, date, content, source, author, tags, highlight, file_path }] }
@@ -22,6 +22,7 @@ export async function getDaily(): Promise<Article[]> {
       highlight: card.highlight ?? '',
       source: card.source ?? '',
       author: card.author ?? '',
+      norm: card.norm ?? '',
     }));
     setCachedArticles(articles);
     return articles;
@@ -60,6 +61,7 @@ export async function getArticlesByIds(ids: string[]): Promise<{items: Article[]
       source: card.source ?? '',
       author: card.author ?? '',
       highlight: card.highlight ?? '',
+      norm: card.norm ?? '',
     }));
     return { items, missing: data.missing ?? [] };
   } catch {
@@ -125,6 +127,7 @@ export async function getArticles(opts: {
       source: it.source || '',
       author: it.author || '',
       theme: (it.tags && it.tags[0]) || '',
+      norm: it.norm || '',
       tags: it.tags || [],
     }));
     return {
@@ -220,15 +223,22 @@ export async function getAnalyticsThemes(top = 10): Promise<AnalyticsThemes> {
 // 同步已读到服务端（POST /api/mark-read）
 export async function markReadRemote(article: Article): Promise<boolean> {
   try {
+    // norm 是服务端规范化后的标题（/api/articles / /api/today 响应里带回）
+    // 用于服务端 analytics 把 reads 与 article metadata 正确关联
+    const norm = article.norm || article.id || '';
+    if (!norm || !article.title) {
+      // 缺 norm（缓存中极旧的 article 没存 norm）或缺 title（服务端必拒）→ 跳过
+      return false;
+    }
     const res = await fetch(`${BASE}/api/mark-read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         device_id: deviceId(),
-        norm: article.chapter || article.id,  // 用 chapter(源) 作为 norm；fallback id
+        norm,
         title: article.title,
         date: article.date,
-        file_path: article.id,                 // 文章 id 实际是 file_path
+        file_path: article.id,
         duration: 0,
       }),
     });

@@ -22,10 +22,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Review'>;
 
 type Mode = 'month' | 'theme';
 
-const MODE_OPTIONS = [
+const MODE_OPTIONS: Array<{ key: Mode; label: string }> = [
   { key: 'month', label: '按 月' },
   { key: 'theme', label: '按 主 题' },
-] as const;
+];
 
 export default function ReviewScreen(props: Props) {
   const { navigation } = props;
@@ -107,7 +107,7 @@ export default function ReviewScreen(props: Props) {
         </Text>
       </View>
 
-      <ModeTabs value={mode} options={[...MODE_OPTIONS]} onChange={(k: Mode) => setMode(k)} />
+      <ModeTabs<Mode> value={mode} options={MODE_OPTIONS} onChange={setMode} />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {loading ? (

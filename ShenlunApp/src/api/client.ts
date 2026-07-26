@@ -6,9 +6,9 @@ const BASE = 'http://124.223.5.144';
 
 function deviceId(): string { return getDeviceId(); }
 
-export async function getDaily(): Promise<Article[]> {
+export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<Article[]> {
   try {
-    const res = await fetch(`${BASE}/api/today?device_id=${deviceId()}`);
+    const res = await fetch(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     // /api/today 返回: { date, count, cards: [{ id, norm, title, date, content, source, author, tags, highlight, file_path }] }

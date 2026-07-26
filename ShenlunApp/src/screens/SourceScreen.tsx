@@ -27,11 +27,11 @@ type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 type Mode = 'theme' | 'source' | 'date';
 
-const MODE_OPTIONS = [
+const MODE_OPTIONS: Array<{ key: Mode; label: string }> = [
   { key: 'theme',  label: '按 主 题' },
   { key: 'source', label: '按 来 源' },
   { key: 'date',   label: '按 日 期' },
-] as const;
+];
 
 interface GroupBucket { key: string; count: number; list: Article[] }
 
@@ -178,7 +178,7 @@ export default function SourceScreen() {
       </View>
 
       {/* 模式切换条 */}
-      <ModeTabs<Mode> value={mode} options={[...MODE_OPTIONS]} onChange={onChangeMode} />
+      <ModeTabs<Mode> value={mode} options={MODE_OPTIONS} onChange={onChangeMode} />
 
       {/* group 筛选 */}
       {groups.length > 0 ? (

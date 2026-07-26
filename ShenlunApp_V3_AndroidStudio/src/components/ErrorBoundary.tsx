@@ -3,7 +3,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
+import { fonts, fontSizes, spacing } from '../theme/tokens';
 
 interface State {
   hasError: boolean;
@@ -66,7 +66,7 @@ function ErrorScreen({ error, componentStack }: { error: Error; componentStack: 
         <Text style={[s.label, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
           堆栈
         </Text>
-        <Text style={[s.stack, { color: t.inkSoft, fontFamily: fonts.sans.regular }]}>
+        <Text style={[s.stack, { color: t.inkSoft, fontFamily: fonts.kai.regular }]}>
           {error.stack}
         </Text>
         {componentStack ? (
@@ -74,7 +74,7 @@ function ErrorScreen({ error, componentStack }: { error: Error; componentStack: 
             <Text style={[s.label, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
               组件堆栈
             </Text>
-            <Text style={[s.stack, { color: t.inkSoft, fontFamily: fonts.sans.regular }]}>
+            <Text style={[s.stack, { color: t.inkSoft, fontFamily: fonts.kai.regular }]}>
               {componentStack}
             </Text>
           </>

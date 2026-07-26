@@ -10,8 +10,9 @@
     "test": "jest",
     "bundle:debug": "react-native bundle --platform android --dev true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "bundle:release": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
-    "build:debug": "npm run bundle:release && cd android && ./gradlew clean assembleDebug",
-    "build:release": "npm run bundle:release && cd android && ./gradlew clean assembleRelease"
+    "_build:apk": "cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleDebug',{stdio:'inherit'})\"",
+    "build:debug": "npm run bundle:release && npm run _build:apk",
+    "build:release": "npm run bundle:release && cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleRelease',{stdio:'inherit'})\""
   },
   "dependencies": {
     "@react-navigation/native": "^6.1.18",

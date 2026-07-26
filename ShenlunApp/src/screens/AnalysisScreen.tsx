@@ -157,7 +157,7 @@ export default function AnalysisScreen() {
                     <View style={[styles.barFg, { backgroundColor: t.seal, width: `${pct * 100}%` }]} />
                   </View>
                   <Text style={[styles.themeCount, { color: t.inkMuted, fontFamily: fonts.serif.bold }]}>
-                    {n}
+                    {theme.count}
                   </Text>
                 </View>
               );
