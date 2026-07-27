@@ -225,7 +225,8 @@ export async function markReadRemote(article: Article): Promise<boolean> {
   try {
     // norm 是服务端规范化后的标题（/api/articles / /api/today 响应里带回）
     // 用于服务端 analytics 把 reads 与 article metadata 正确关联
-    const norm = article.norm || article.id || '';
+    // 注意：不要 fallback 到 article.id (file_path)，否则 analytics 拿 file_path 作 key 永远找不到 metadata
+    const norm = article.norm ?? '';
     if (!norm || !article.title) {
       // 缺 norm（缓存中极旧的 article 没存 norm）或缺 title（服务端必拒）→ 跳过
       return false;

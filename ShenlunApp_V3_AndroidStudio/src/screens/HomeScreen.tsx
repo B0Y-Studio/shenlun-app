@@ -34,7 +34,13 @@ export default function HomeScreen() {
     try {
       const data = await getDaily({ signal });
       setArticles(data);
-    } catch {
+    } catch (e: any) {
+      // AbortError 表示组件卸载 / 5s 超时 / fetch 被 controller.abort() 取消
+      // 此时 setArticles([]) 会清掉 state 里的内容（包括之前 fetch 成功的缓存）
+      // 不要写 state，让 useEffect 后续的 cancelled 检查兜住
+      if (e?.name === 'AbortError') return;
+      // 真正的网络错误：getDaily 内已 fallback 到 MMKV 缓存，不会到 catch
+      // 这里兜个空数组防止 setArticles 卡住
       setArticles([]);
     } finally {
       setLoading(false);
