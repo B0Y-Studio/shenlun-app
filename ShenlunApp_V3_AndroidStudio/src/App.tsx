@@ -16,6 +16,7 @@ import PaperScreen from './screens/PaperScreen';
 import AnalysisScreen from './screens/AnalysisScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { SplashScreen } from './components/SplashScreen';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { tabBus } from './navigation/tabBus';
 
 export type RootStackParamList = {
@@ -95,7 +96,11 @@ export default function App() {
       <ThemeProvider>
         {showSplash
           ? <SplashScreen onComplete={() => setShowSplash(false)} />
-          : <RootNavigator />
+          : (
+            <ErrorBoundary>
+              <RootNavigator />
+            </ErrorBoundary>
+          )
         }
       </ThemeProvider>
     </SafeAreaProvider>

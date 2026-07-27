@@ -356,7 +356,7 @@ def get_today_cards():
     cards = unique
     # extract content and id for each card
     for c in cards:
-        c["id"] = c.get("file_path", c["norm"]).replace("\\\\", "/")
+        c["id"] = c.get("file_path", c["norm"]).replace("\\", "/")
         try:
             with open(c["file_path"], "r", encoding="utf-8") as _f:
                 _body = _f.read()
