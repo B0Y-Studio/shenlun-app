@@ -50,6 +50,33 @@ HIGHLIGHTS_DIR = os.path.join(OUT_DIR, "_highlights")
 os.makedirs(RECORDS_DIR, exist_ok=True)
 os.makedirs(HIGHLIGHTS_DIR, exist_ok=True)
 
+# === AI 评卷模块配置 ===
+JUDGE_DB_PATH = os.path.join(OUT_DIR, '_records', 'judge.db')
+JUDGE_RECORDS_DIR = os.path.join(OUT_DIR, '_records')
+_judge_db = None
+_judge_db_lock = threading.Lock()
+
+
+def get_judge_db():
+    """返回全局 JudgeDB 单例。
+
+    测试可通过 `server.judge_db = jdb` 注入隔离实例，handlers 会优先使用。
+    """
+    global _judge_db
+    with _judge_db_lock:
+        if _judge_db is None:
+            from judge_db import JudgeDB
+            _judge_db = JudgeDB(JUDGE_DB_PATH, JUDGE_RECORDS_DIR)
+            _judge_db.init()
+        return _judge_db
+
+
+def _judge_db_for(server):
+    """优先取 server.judge_db（测试用），否则取全局单例。"""
+    if server is not None and getattr(server, 'judge_db', None) is not None:
+        return server.judge_db
+    return get_judge_db()
+
 # 锁：防止多请求同时修改 DB
 db_lock = threading.Lock()
 
@@ -81,8 +108,74 @@ class CardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_json(self, status: int, body: dict):
+        return self._send(status, json.dumps(body, ensure_ascii=False), 'application/json; charset=utf-8')
+
+    # === /api/judge/* handlers ===
+    def _judge_config_get(self):
+        qs = parse_qs(urlparse(self.path).query)
+        device_id = (qs.get('device_id') or [''])[0]
+        if not device_id:
+            return self._send_json(400, {'error': 'missing_device_id'})
+        cfg = _judge_db_for(self.server).get_config(device_id)
+        if not cfg:
+            return self._send_json(200, {'configured': False})
+        return self._send_json(200, {'configured': True, **cfg})
+
+    def _judge_config_post(self, data: dict | None = None):
+        if data is None:
+            try:
+                n = int(self.headers.get('Content-Length', 0))
+                body_raw = self.rfile.read(n).decode('utf-8')
+                data = json.loads(body_raw) if body_raw else {}
+            except Exception as e:
+                return self._send_json(400, {'error': f'bad_json: {e}'})
+        device_id = data.get('device_id', '')
+        provider = data.get('provider', '')
+        base_url = data.get('base_url', '')
+        model = data.get('model', '')
+        api_key = data.get('api_key', '')
+        if not all([device_id, provider, base_url, model, api_key]):
+            return self._send_json(400, {'error': 'missing_fields'})
+        out = _judge_db_for(self.server).save_config(device_id, provider, base_url, model, api_key)
+        return self._send_json(200, {'ok': True, **out})
+
+    def _judge_config_delete(self):
+        qs = parse_qs(urlparse(self.path).query)
+        device_id = (qs.get('device_id') or [''])[0]
+        if not device_id:
+            return self._send_json(400, {'error': 'missing_device_id'})
+        _judge_db_for(self.server).delete_config(device_id)
+        return self._send_json(200, {'ok': True})
+
+    def _judge_history_list(self):
+        qs = parse_qs(urlparse(self.path).query)
+        device_id = (qs.get('device_id') or [''])[0]
+        try:
+            limit = int((qs.get('limit') or ['20'])[0])
+        except ValueError:
+            limit = 20
+        limit = max(1, min(100, limit))
+        if not device_id:
+            return self._send_json(400, {'error': 'missing_device_id'})
+        items = _judge_db_for(self.server).list_history(device_id, limit)
+        return self._send_json(200, {'items': items})
+
+    def _judge_history_delete(self, history_id: str):
+        qs = parse_qs(urlparse(self.path).query)
+        device_id = (qs.get('device_id') or [''])[0]
+        if not device_id:
+            return self._send_json(400, {'error': 'missing_device_id'})
+        ok = _judge_db_for(self.server).delete_history(history_id, device_id)
+        return self._send_json(200, {'ok': ok})
+
     def do_GET(self):
         path = urlparse(self.path).path
+        # --- /api/judge/* ---
+        if path.startswith('/api/judge/llm-config'):
+            return self._judge_config_get()
+        if path.startswith('/api/judge/history'):
+            return self._judge_history_list()
         if path == '/' or path == '/index.html':
             self._send(200, load_index())
         elif path == '/api/today':
@@ -136,6 +229,10 @@ class CardHandler(BaseHTTPRequestHandler):
             data = {}
         print(f"[POST] path={path} ctype={ctype} data_keys={list(data.keys())}", file=__import__('sys').stderr)
 
+        # --- /api/judge/* ---
+        if path.startswith('/api/judge/llm-config'):
+            return self._judge_config_post(data)
+
         # POST /api/articles 走 list_articles
         if path == '/api/articles':
             qs = {k: [v] for k, v in data.items()}
@@ -153,6 +250,16 @@ class CardHandler(BaseHTTPRequestHandler):
             self._send(200, skip_card(data), 'application/json')
         else:
             self._send(404, 'Not Found')
+
+    def do_DELETE(self):
+        path = urlparse(self.path).path
+        # --- /api/judge/* ---
+        if path.startswith('/api/judge/llm-config'):
+            return self._judge_config_delete()
+        m = re.match(r'^/api/judge/([^/?]+)$', path)
+        if m:
+            return self._judge_history_delete(m.group(1))
+        self._send(404, 'Not Found')
 
 
 # === 选卡逻辑 ===
