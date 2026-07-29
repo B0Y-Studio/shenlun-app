@@ -30,6 +30,8 @@ import threading
 import hashlib
 import time
 import pickle
+import urllib.request
+import urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
@@ -169,6 +171,196 @@ class CardHandler(BaseHTTPRequestHandler):
         ok = _judge_db_for(self.server).delete_history(history_id, device_id)
         return self._send_json(200, {'ok': ok})
 
+    def _judge_run(self):
+        try:
+            n = int(self.headers.get('Content-Length', 0))
+            body_raw = self.rfile.read(n).decode('utf-8')
+            body = json.loads(body_raw) if body_raw else {}
+        except Exception as e:
+            return self._send_json(400, {'error': f'bad_json: {e}'})
+        device_id = body.get('device_id', '')
+        question = body.get('question') or {}
+        user_answer = body.get('user_answer', '') or ''
+        if not device_id or not user_answer or not question:
+            return self._send_json(400, {'error': 'missing_fields'})
+        if len(user_answer.strip()) < 50:
+            return self._send_json(400, {'error': 'answer_too_short', 'min': 50})
+        jdb = _judge_db_for(self.server)
+        if not jdb.check_rate_limit(device_id):
+            self.send_response(429)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Retry-After', '60')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'rate_limited', 'retry_after': 60}).encode())
+            return
+        cfg = jdb.get_config(device_id)
+        if not cfg:
+            return self._send_json(400, {'error': 'no_llm_config'})
+        api_key = jdb._decrypt_key(device_id)
+        if not api_key:
+            return self._send_json(400, {'error': 'no_llm_config'})
+
+        # 拼 prompt
+        sys_prompt = self._build_system_prompt(question.get('score', 20))
+        usr_prompt = self._build_user_prompt(question, user_answer)
+        body_req = {
+            'model': cfg['model'],
+            'messages': [
+                {'role': 'system', 'content': sys_prompt},
+                {'role': 'user',   'content': usr_prompt},
+            ],
+            'stream': True,
+            'temperature': 0.3,
+        }
+        url = cfg['base_url'].rstrip('/') + '/v1/chat/completions'
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body_req).encode(),
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {api_key}',
+            },
+            method='POST',
+        )
+
+        # SSE 响应头
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('X-Accel-Buffering', 'no')
+        self.end_headers()
+
+        full = []
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode('utf-8', errors='ignore').rstrip('\n')
+                    if not line or not line.startswith('data:'):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == '[DONE]':
+                        self.wfile.write(b'data: [DONE]\n\n')
+                        self.wfile.flush()
+                        break
+                    try:
+                        evt = json.loads(payload)
+                        delta = ((evt.get('choices') or [{}])[0]).get('delta', {}).get('content', '')
+                        if delta:
+                            full.append(delta)
+                            chunk = json.dumps({'delta': delta}, ensure_ascii=False, separators=(',', ':'))
+                            self.wfile.write(f'data: {chunk}\n\n'.encode('utf-8'))
+                            self.wfile.flush()
+                    except json.JSONDecodeError:
+                        continue
+        except urllib.error.HTTPError as e:
+            err = json.dumps({'error': f'llm_http_{e.code}'}).encode()
+            self.wfile.write(f'data: {err}\n\n'.encode('utf-8'))
+            self.wfile.flush()
+            self.wfile.write(b'data: [DONE]\n\n')
+            self.wfile.flush()
+            return
+        except Exception as e:
+            err = json.dumps({'error': f'upstream_error: {e}'}).encode()
+            self.wfile.write(f'data: {err}\n\n'.encode('utf-8'))
+            self.wfile.flush()
+            self.wfile.write(b'data: [DONE]\n\n')
+            self.wfile.flush()
+            return
+
+        # 异步存 history
+        full_text = ''.join(full)
+        threading.Thread(
+            target=self._save_judge_history,
+            args=(jdb, device_id, question, user_answer, full_text),
+            daemon=True,
+        ).start()
+
+    def _save_judge_history(self, jdb, device_id, question, user_answer, full_text):
+        import re
+        # 按括号深度切 JSON
+        start = full_text.find('{')
+        if start < 0:
+            response_json = full_text
+            total = 0
+        else:
+            depth = 0
+            end = -1
+            for i in range(start, len(full_text)):
+                c = full_text[i]
+                if c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end > start:
+                try:
+                    parsed = json.loads(full_text[start:end])
+                    response_json = json.dumps(parsed, ensure_ascii=False)
+                    total = int(parsed.get('total', 0))
+                except Exception:
+                    response_json = full_text
+                    total = 0
+            else:
+                response_json = full_text
+                total = 0
+        jdb.save_history({
+            'device_id': device_id,
+            'question_id': question.get('id', ''),
+            'question_no': str(question.get('question_no', '')),
+            'question_title': question.get('title', ''),
+            'question_score': int(question.get('score', 0) or 0),
+            'question_body': question.get('body', ''),
+            'user_answer': user_answer,
+            'response_json': response_json,
+            'total_score': total,
+        })
+
+    def _build_system_prompt(self, score: int) -> str:
+        s = int(score)
+        return f"""你是申论阅卷老师。用户提交了一道申论题答案，请按官方评分维度评判并以严格 JSON 返回。
+
+维度与权重（按题目分值等比缩放，本题总分为 {s} 分）：
+- 立意 (25%): 是否扣题、观点是否明确、是否切合题意
+- 结构 (20%): 是否总分/并列/递进，开头结尾是否呼应，段落逻辑是否清晰
+- 论据 (25%): 是否充实、是否结合材料/时政/案例、数据是否准确
+- 语言 (20%): 表达是否规范、是否书面化、有无语病/口语化
+- 字数 (10%): 是否达到题目要求（一般 ≥ 800 字达标）
+
+输出格式（**只返回 JSON，不要任何其他文字，不要用 ```json 包裹**）：
+{{
+  "commentary": "<一段流式评语，长度 200-400 字>",
+  "total": <0-{s}>,
+  "dimensions": [
+    {{"key": "theme",    "score": <0-{round(s*0.25)}>, "comment": "<一句话点评>"}},
+    {{"key": "structure","score": <0-{round(s*0.20)}>, "comment": "<一句话点评>"}},
+    {{"key": "argument", "score": <0-{round(s*0.25)}>, "comment": "<一句话点评>"}},
+    {{"key": "language", "score": <0-{round(s*0.20)}>, "comment": "<一句话点评>"}},
+    {{"key": "wordcount","score": <0-{round(s*0.10)}>, "comment": "<一句话点评>"}}
+  ],
+  "highlights": ["<亮点1>", "<亮点2>", "<亮点3>"],
+  "weaknesses": ["<不足1>", "<不足2>", "<不足3>"],
+  "rewrite_hint": "<一段话：建议重写方向，100-200 字>"
+}}"""
+
+    def _build_user_prompt(self, q: dict, user_answer: str) -> str:
+        body = (q.get('body') or '')[:300]
+        if len(q.get('body') or '') > 300:
+            body += '...'
+        n = len(user_answer)
+        return f"""题目：{q.get('title','')}
+分值：{q.get('score','')} 分
+题型：申论
+
+题干（节选）：
+{body}
+
+用户答案（{n} 字）：
+{user_answer}
+
+请按 System Prompt 中定义的维度评判并只返回 JSON。"""
+
     def do_GET(self):
         path = urlparse(self.path).path
         # --- /api/judge/* ---
@@ -209,6 +401,11 @@ class CardHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        # /api/judge/run 走独立 SSE 流式路径，自行读 body
+        if path == '/api/judge/run':
+            return self._judge_run()
+
         length = int(self.headers.get('Content-Length', 0))
         raw_bytes = self.rfile.read(length) if length else b''
         # 兼容多种 Content-Type：application/json / application/x-www-form-urlencoded / 文本
