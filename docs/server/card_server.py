@@ -36,6 +36,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from collections import Counter
+from judge_db import FERNET_KEY_ENV  # 用于启动 banner 显示 fernet key 来源
 
 # === 路径配置 (跨平台) ===
 # 通过环境变量或默认值设置 OUT_DIR
@@ -1628,6 +1629,8 @@ if __name__ == "__main__":
     print(f"  知识库: {SHIPING_DIR}")
     print(f"  数据库: {DB_PATH}")
     print(f"  每日: {cfg['daily_count']} 篇")
+    _fk_src = 'env' if os.environ.get(FERNET_KEY_ENV) else 'file'
+    print(f'[judge] db={JUDGE_DB_PATH}  fernet_key={_fk_src}  rate=5/min')
     print(f"=" * 60)
     print(f"  按 Ctrl+C 停止")
     try:
