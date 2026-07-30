@@ -87,8 +87,9 @@ export async function* runJudge(
       }),
       signal: opts.signal,
     });
-  } catch (e: any) {
-    yield { type: 'error', code: 'network', message: String(e?.message ?? e) };
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    yield { type: 'error', code: 'network', message };
     return;
   }
   if (!res.ok) {
