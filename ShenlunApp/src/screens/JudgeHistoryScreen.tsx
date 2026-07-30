@@ -7,9 +7,13 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
 import { listLocalRecords, deleteLocalRecord, type LocalJudgeRecord } from '../llm/judgeStore';
-import { fetchJudgeHistory, deleteJudgeHistoryServer } from '../api/llmConfig';
+import { fetchJudgeHistory, deleteJudgeHistoryServer, type RemoteJudgeItem } from '../api/llmConfig';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'JudgeHistory'>;
+
+type HistoryRow =
+  | (LocalJudgeRecord & { _isLocal: true })
+  | (RemoteJudgeItem & { _isLocal: false });
 
 export default function JudgeHistoryScreen() {
   const { theme } = useTheme();
@@ -45,17 +49,17 @@ export default function JudgeHistoryScreen() {
     return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const renderItem = ({ item, isLocal }: { item: any; isLocal: boolean }) => (
+  const renderItem = ({ item, isLocal }: { item: HistoryRow; isLocal: boolean }) => (
     <Pressable
       onLongPress={() => onDelete(item.id, isLocal)}
       style={[styles.card, { backgroundColor: t.paper, borderColor: t.border }]}
     >
       <View style={styles.cardHead}>
         <Text style={[styles.qTitle, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
-          {item.questionTitle || item.question_title || '未命名题'}
+          {item.questionTitle ?? '未命名题'}
         </Text>
         <Text style={[styles.score, { color: t.seal, fontFamily: fonts.serif.bold }]}>
-          {item.totalScore}/{item.questionScore ?? item.question_score}
+          {item.totalScore}/{item.questionScore}
         </Text>
       </View>
       <Text style={[styles.meta, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
@@ -73,15 +77,15 @@ export default function JudgeHistoryScreen() {
         <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]}>评卷历史</Text>
         <View style={{ width: 60 }} />
       </View>
-      <FlatList
+      <FlatList<HistoryRow>
         data={[
-          ...records.map(r => ({ ...r, _isLocal: true })),
-          ...serverOnly.map(s => ({ ...s, _isLocal: false })),
+          ...records.map(r => ({ ...r, _isLocal: true } as HistoryRow)),
+          ...serverOnly.map(s => ({ ...s, _isLocal: false } as HistoryRow)),
         ]}
-        keyExtractor={(it: any) => it.id + (it._isLocal ? '_L' : '_S')}
+        keyExtractor={(item: HistoryRow) => item.id + (item._isLocal ? '_L' : '_S')}
         contentContainerStyle={{ padding: spacing.lg }}
         ListEmptyComponent={<Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>暂无评卷记录</Text>}
-        renderItem={({ item }: any) => renderItem({ item, isLocal: item._isLocal })}
+        renderItem={({ item }: { item: HistoryRow }) => renderItem({ item, isLocal: item._isLocal })}
       />
     </SafeAreaView>
   );
