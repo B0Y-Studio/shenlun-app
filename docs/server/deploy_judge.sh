@@ -15,6 +15,6 @@ ssh "$REMOTE_HOST" "set -e
   systemctl restart '$SERVICE_NAME'
   sleep 1
   systemctl status '$SERVICE_NAME' --no-pager
-  curl -sf http://127.0.0.1:8080/api/judge/llm-config?device_id=__healthcheck || echo 'healthcheck endpoint not 200, check logs'
+  curl -sf http://127.0.0.1:8080/api/judge/llm-config?device_id=__healthcheck || { echo 'healthcheck failed' >&2; exit 1; }
 "
 echo "[deploy] done"
