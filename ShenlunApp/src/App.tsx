@@ -15,6 +15,10 @@ import SourceScreen from './screens/SourceScreen';
 import PaperScreen from './screens/PaperScreen';
 import AnalysisScreen from './screens/AnalysisScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import JudgeScreen from './screens/JudgeScreen';
+import JudgeHistoryScreen from './screens/JudgeHistoryScreen';
+import LlmConfigScreen from './screens/LlmConfigScreen';
+import type { Question } from './api/client';
 import { SplashScreen } from './components/SplashScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { tabBus } from './navigation/tabBus';
@@ -24,6 +28,9 @@ export type RootStackParamList = {
   Review: undefined;
   Reader: { id: string };
   Gold: undefined;
+  Judge: { question: Question | undefined };
+  JudgeHistory: undefined;
+  LlmConfig: undefined;
 };
 
 /** 主屏内可由 tabBus 带过来的过滤项（如 source 主题过滤） */
@@ -83,6 +90,9 @@ function RootNavigator() {
           <Stack.Screen name="Review" component={ReviewScreen} />
           <Stack.Screen name="Reader" component={ReaderScreen} />
           <Stack.Screen name="Gold" component={GoldScreen} />
+          <Stack.Screen name="Judge"         component={JudgeScreen}         options={{ headerShown: false }} />
+          <Stack.Screen name="JudgeHistory"  component={JudgeHistoryScreen}  options={{ headerShown: false }} />
+          <Stack.Screen name="LlmConfig"     component={LlmConfigScreen}     options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

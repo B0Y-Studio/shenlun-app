@@ -96,11 +96,8 @@ export default function AnalysisScreen() {
   }, []);
 
   const onAIJudge = useCallback(() => {
-    // AI 评卷入口：当前仅提示功能即将上线
-    import('react-native').then(({ Alert }) => {
-      Alert.alert('AI 评卷', '即将上线：上传手写答案截图，AI 按评分要点评分');
-    });
-  }, []);
+    nav.navigate('Judge', { question: undefined });
+  }, [nav]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>

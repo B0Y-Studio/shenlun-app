@@ -2,10 +2,14 @@
 // 主题模式切换 + 通用设置（占位）
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../App';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 
 type Mode = 'light' | 'dark' | 'system';
+type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 const MODES: { key: Mode; label: string }[] = [
   { key: 'light',  label: '日间' },
@@ -16,6 +20,7 @@ const MODES: { key: Mode; label: string }[] = [
 export default function SettingsScreen() {
   const { theme, themeMode, setThemeMode } = useTheme();
   const t = theme.tokens;
+  const navigation = useNavigation<NavProp>();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -55,6 +60,23 @@ export default function SettingsScreen() {
         <Text style={[styles.empty, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
           更多设置即将上线
         </Text>
+
+        <Pressable
+          onPress={() => navigation.navigate('LlmConfig')}
+          style={({ pressed }) => [
+            styles.settingRow,
+            { backgroundColor: t.paper, borderColor: t.border },
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Text style={[styles.settingTitle, { color: t.ink, fontFamily: fonts.kai.bold }]}>
+            AI 评卷 · LLM 配置
+          </Text>
+          <Text style={[styles.settingSub, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+            配置 Key、切换服务商
+          </Text>
+          <Text style={[styles.arrow, { color: t.brassDeep }]}>›</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -78,4 +100,14 @@ const styles = StyleSheet.create({
   },
   optLbl: { fontSize: fontSizes.body, letterSpacing: 4 },
   empty: { textAlign: 'center', fontSize: fontSizes.body, letterSpacing: 4, marginTop: spacing.xxxl },
+
+  settingRow: {
+    padding: spacing.lg,
+    borderWidth: borders.hair,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+  },
+  settingTitle: { fontSize: fontSizes.body, letterSpacing: 3, marginBottom: spacing.xs },
+  settingSub:   { fontSize: fontSizes.caption, letterSpacing: 1 },
+  arrow:        { position: 'absolute', right: spacing.lg, top: spacing.lg, fontSize: 24 },
 });

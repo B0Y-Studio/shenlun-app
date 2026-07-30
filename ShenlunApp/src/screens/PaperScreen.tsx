@@ -101,7 +101,12 @@ export default function PaperScreen() {
           <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
             第{activeQ.question_no}题
           </Text>
-          <View style={{ width: 80 }} />
+          <Pressable
+            onPress={() => nav.navigate('Judge', { question: activeQ })}
+            style={styles.aiBtn}
+          >
+            <Text style={[styles.aiBtnText, { color: t.paper, fontFamily: fonts.serif.bold }]}>🤖 评卷</Text>
+          </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
@@ -385,4 +390,7 @@ const styles = StyleSheet.create({
     borderWidth: borders.hair, borderRadius: radii.sm,
   },
   qSourceLine: { fontSize: fontSizes.caption, letterSpacing: 1, lineHeight: 20 },
+
+  aiBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: '#C04851', borderRadius: radii.sm },
+  aiBtnText: { fontSize: fontSizes.caption },
 });
