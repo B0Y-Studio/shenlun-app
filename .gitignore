@@ -55,6 +55,11 @@ __pycache__/
 /backup/
 /backups/
 
+# ─── 归档目录（已下线的项目 / V3 副本 / 临时备份）───
+/_archive/
+/ShenlunApp/         # V3 副本，升级后残留空目录
+/nul                  # Windows 上某些工具误创建
+
 # ─── 大型压缩包（不入仓） ───
 *.zip
 !ShenlunApp_V3_AndroidStudio-source.zip

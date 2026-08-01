@@ -1,167 +1,79 @@
-# 申论积累 (ShenlunApp)
+This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
-> 申论备考一站式应用：精读素材 / 真题练习 / 复盘回顾 / 分析建议 / 积累笔记
+# Getting Started
 
-V3 方案 Android 工程。
+>**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
 
-## 目录
+## Step 1: Start the Metro Server
 
-- [`ShenlunApp/`](./ShenlunApp) — React Native 主工程源码
-- [`ShenlunApp_V3_AndroidStudio/`](./ShenlunApp_V3_AndroidStudio) — V3 定稿的 Android Studio 工程副本
-- [`docs/mockups/`](./docs/mockups) — 设计稿 HTML
-- [`docs/sessions/`](./docs/sessions) — 历史会话记录
+First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
 
-## V3 设计要点
-
-V3 首页布局严格对照 `docs/mockups/home_v3_panel.html`：
-
-| 区域 | 元素 |
-|------|------|
-| 头部 | "申论" 28px 衬线粗体 + 右侧旋转 -3° 红色日期印章 |
-| 锦言 | 大字"锦言" + 红色"换一句" + 13.5px 楷体斜体正文 + 红色引号 |
-| 昨日总结 | 居中"昨 日 总 结" + 3 列虚线分隔数字（已读/标记/分钟） |
-| 今日待做 | "今 日 待 做" eyebrow + 22px 衬线粗体标题 + 黄铜斜纹进度段 + 右上角虚线圆 |
-| 主菜单 | 5 行：壹/贰/叁/肆/伍 衬线斜体 + 标题 + 副标题 + › |
-| 底部 Tab | 5 个楷体加粗 tab（积累/素材/题目/分析/设置），active 红色 + 3px 下划线 |
-
-设计 tokens：宣纸 `#F0EAD6` / 深栗 `#1C1714` / 印章红 `#C04851` / 黄铜金 `#C9A962` / 纸白 `#FFFBF0`。
-
-## 技术栈
-
-- React Native 0.74.5 + TypeScript 5
-- React Navigation 6 (native-stack)
-- MMKV 2.12.2 (本地存储)
-- SourceHanSerifCN 4 字重 (Regular/Medium/Bold/Heavy)
-- Hermes JS engine
-- Gradle 8.6 + Kotlin 1.9.22 + JDK 17
-
-## 打开方式
-
-### Android Studio
-
-```
-File → Open → 选择 ShenlunApp_V3_AndroidStudio/android
-```
-
-**关键配置：**
-
-1. **Gradle JDK** = `C:\Users\hecto\jdk17\jdk-17.0.19+10`
-2. **gradle.properties** 增加：
-   ```
-   org.gradle.java.installations.auto-detect=true
-   org.gradle.java.installations.auto-download=false
-   ```
-3. **SDK** = `F:\Android\Sdk`（在 `android/local.properties` 写入 `sdk.dir=F\\:\\Android\\Sdk`）
-
-### 命令行构建
+To start Metro, run the following command from the _root_ of your React Native project:
 
 ```bash
-cd ShenlunApp_V3_AndroidStudio
-npm install  # 仅当 node_modules 缺失
-cd android
-./gradlew.bat assembleDebug
+# using npm
+npm start
+
+# OR using Yarn
+yarn start
 ```
 
-APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
+## Step 2: Start your Application
 
-### 安装到设备
+Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+
+### For Android
 
 ```bash
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+# using npm
+npm run android
+
+# OR using Yarn
+yarn android
 ```
 
-## 调试
-
-### 白屏 / 闪退
-
-`--dev true` bundle 会让 RN bridge 试图连接 Metro dev server (`ws://10.0.2.2:8081`)，未运行 Metro 时会阻塞渲染并触发 OOM kill。**始终用 `--dev false`**。
+### For iOS
 
 ```bash
-# 1. 生成 dev=false bundle（避免 Metro dev server 阻塞）
-npm run bundle:release
+# using npm
+npm run ios
 
-# 2. clean 重建（避免 APK 缓存旧 bundle）
-cd android && ./gradlew clean assembleDebug
-
-# 3. 装+启动
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am force-stop com.shenlunapp
-adb shell am start -n com.shenlunapp/.MainActivity
-
-# 4. 抓 logcat
-adb logcat -c
-adb logcat | grep -E "ReactNativeJS|ErrorBoundary|FATAL|com\.shenlunapp"
+# OR using Yarn
+yarn ios
 ```
 
-### 内存 / OOM
+If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
 
-模拟器默认 RAM 较小（~1.5GB），V3 启动时 RNScreens + SafeArea + WebView + MMKV 总占用 ~200MB 容易触发 lowmemorykiller。`HomeScreen` 已加 5s 硬超时防止 fetch 永久 hang。
+This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
 
-```bash
-# 验证 OOM
-adb logcat | grep -E "lowmemorykiller|Kill.*com.shenlunapp"
-```
+## Step 3: Modifying your App
 
-### 网络超时
+Now that you have successfully run the app, let's modify it.
 
-服务端不可达时 `fetch` 会一直 hang。`client.ts` 全局 fetch 目前未设超时 — 后续给 `BASE` 加 AbortController 包装。
+1. Open `App.tsx` in your text editor of choice and edit some lines.
+2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
 
-## 字体说明
+   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
 
-工程自带 SourceHanSerifCN 4 字重 OTF 文件，路径：
+## Congratulations! :tada:
 
-```
-android/app/src/main/assets/fonts/
-  SourceHanSerifCN-Regular.otf
-  SourceHanSerifCN-Medium.otf
-  SourceHanSerifCN-Bold.otf
-  SourceHanSerifCN-Heavy.otf
-```
+You've successfully run and modified your React Native App. :partying_face:
 
-**关键**：字体引用名（`tokens.ts`）必须与 OTF 内部 PostScript name 一致，即 `SourceHanSerifCN-*`（不是 SC）。
+### Now what?
 
-## V3 启动入口链
+- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
+- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
 
-```
-index.js → src/App.tsx → MainTabs(activeKey='home') → HomeScreen
-```
+# Troubleshooting
 
-根 `App.tsx` 已转发到 `src/App.tsx`，避免加载 React Native 默认模板。
+If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
-## 构建产物清理
+# Learn More
 
-旧 V1/V2 bundle 残留会导致新 bundle 被覆盖。如遇到首页显示异常：
+To learn more about React Native, take a look at the following resources:
 
-```bash
-rm -f ShenlunApp_V3_AndroidStudio/android/app/src/main/assets/index.android.bundle
-```
-
-## 服务端 API
-
-服务端代码：`docs/server/card_server.py`（已部署到生产 `124.223.5.144`）
-
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/today` | GET | 今日 3 篇（按设备排重） |
-| `/api/articles` | GET / **POST** | 全量素材库，支持 theme/source/date/q/page/pageSize 过滤。POST JSON 推荐（避免中文 URL 编码问题） |
-| `/api/card?norm=xxx` | GET | 单篇正文 HTML |
-| `/api/papers` | GET | 真题库列表（国考/省考/年/省份） |
-| `/api/paper?id=xxx` | GET | 真题库详情 |
-| `/api/questions?paper_id=xxx` | GET | 真题单题 |
-| `/api/mark-read` | POST | 标记已读 |
-| `/api/note` | POST | 保存金句/笔记 |
-
-### 部署
-
-```bash
-# 本地
-XUEXI_DIR=E:/申论知识库/09_选卡阅读 python3 docs/server/card_server.py
-
-# 远程
-scp docs/server/card_server.py ubuntu@124.223.5.144:/opt/xuexi/09_选卡阅读/
-ssh ubuntu@124.223.5.144 'pkill -9 -f card_server; cd /opt/xuexi/09_选卡阅读 && nohup python3 card_server.py > /tmp/card_server.log 2>&1 &'
-```
-
-## License
-
-MIT
+- [React Native Website](https://reactnative.dev) - learn more about React Native.
+- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
+- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
+- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
+- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
