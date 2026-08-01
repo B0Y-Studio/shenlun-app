@@ -88,3 +88,26 @@ export async function deleteJudgeHistoryServer(id: string, deviceId: string = ge
     return false;
   }
 }
+
+/**
+ * Lightweight connectivity probe to the server's `/api/judge/run` endpoint.
+ * Issues a real LLM call with a 70-char dummy answer (passes the server's 50-char
+ * minimum); costs the user 1 LLM call. Use only when the user explicitly clicks
+ * "测试连接". Centralizes the BASE URL so future changes don't touch call sites.
+ */
+export async function testLlmConnection(deviceId: string = getDeviceId()): Promise<{ ok: boolean; status: number }> {
+  try {
+    const r = await fetch(`${BASE}/api/judge/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        question: { id: 'test', title: '测试题', body: '这是一道测试题', score: 10, question_no: '0' },
+        user_answer: '这是一段测试答案，至少要达到五十字才能通过校验，确保服务端接收到正确的请求。本测试答案用于校验LLM连接，不计入评分，仅作为联通性验证用途。',
+      }),
+    });
+    return { ok: r.ok, status: r.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}

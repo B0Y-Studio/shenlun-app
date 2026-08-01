@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, TextInput,
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { PRESETS, findPreset, type Provider, type LlmConfig } from '../llm/provider';
-import { fetchLlmConfig, saveLlmConfig, deleteLlmConfig } from '../api/llmConfig';
+import { fetchLlmConfig, saveLlmConfig, deleteLlmConfig, testLlmConnection } from '../api/llmConfig';
 import { getDeviceId } from '../storage/mmkv';
 
 export default function LlmConfigScreen() {
@@ -52,16 +52,8 @@ export default function LlmConfigScreen() {
   const onTest = useCallback(async () => {
     setTesting(true);
     try {
-      const r = await fetch('http://124.223.5.144/api/judge/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          device_id: getDeviceId(),
-          question: { id: 'test', title: '测试题', body: '这是一道测试题', score: 10, question_no: '0' },
-          user_answer: '这是一段测试答案，至少要达到五十字才能通过校验，确保服务端接收到正确的请求。本测试答案用于校验LLM连接，不计入评分，仅作为联通性验证用途。',
-        }),
-      });
-      Alert.alert(r.ok ? '连接成功' : '连接失败', r.ok ? '请前往分析 Tab 试评' : `HTTP ${r.status}`);
+      const { ok, status } = await testLlmConnection();
+      Alert.alert(ok ? '连接成功' : '连接失败', ok ? '请前往分析 Tab 试评' : `HTTP ${status}`);
     } catch (e: unknown) {
       Alert.alert('连接失败', e instanceof Error ? e.message : String(e));
     } finally {
