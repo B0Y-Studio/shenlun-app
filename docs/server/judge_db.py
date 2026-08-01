@@ -145,7 +145,7 @@ class JudgeDB:
         return affected > 0
 
     def save_history(self, record: dict) -> str:
-        hid = record.get('id') or f'judge-{uuid.uuid4().hex[:16]}'
+        hid = record.get('id') or f'cloud-{uuid.uuid4().hex[:16]}'
         with self._lock:
             conn = sqlite3.connect(self.db_path)
             conn.execute("""

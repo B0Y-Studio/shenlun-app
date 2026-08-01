@@ -36,7 +36,10 @@ export interface LocalJudgeRecord {
 }
 
 function genId(): string {
-  return 'judge-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  // 'local-' prefix namespacing separates locally-generated IDs from server-generated
+  // ('cloud-') IDs, preventing any birthday-paradox collision from being misread as
+  // a duplicate and hiding a server record. See final review Important #3.
+  return 'local-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
 }
 
 export function addLocalRecord(rec: Omit<LocalJudgeRecord, 'id' | 'createdAt'>): LocalJudgeRecord {
