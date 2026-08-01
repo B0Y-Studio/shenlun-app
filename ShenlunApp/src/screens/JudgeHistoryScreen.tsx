@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
 import { listLocalRecords, deleteLocalRecord, type LocalJudgeRecord } from '../llm/judgeStore';
 import { fetchJudgeHistory, deleteJudgeHistoryServer, type RemoteJudgeItem } from '../api/llmConfig';
+import { getDeviceId } from '../storage/mmkv';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'JudgeHistory'>;
 
@@ -24,7 +25,7 @@ export default function JudgeHistoryScreen() {
 
   const load = useCallback(async () => {
     setRecords(listLocalRecords(50));
-    const serverItems = await fetchJudgeHistory(undefined, 50);
+    const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
     const localIds = new Set(listLocalRecords(200).map(r => r.id));
     setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
   }, []);

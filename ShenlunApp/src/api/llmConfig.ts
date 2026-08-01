@@ -59,7 +59,10 @@ export interface RemoteJudgeItem {
   createdAt: number;
 }
 
-export async function fetchJudgeHistory(deviceId: string = getDeviceId(), limit = 20): Promise<RemoteJudgeItem[]> {
+export async function fetchJudgeHistory(deviceId: string, limit = 20): Promise<RemoteJudgeItem[]> {
+  // deviceId is required (caller must pass getDeviceId() explicitly). Previous signature
+  // had `deviceId: string = getDeviceId()` default + `undefined` opt-in from call sites,
+  // which was a code smell (final review Important #5).
   try {
     const r = await fetch(`${BASE}/api/judge/history?device_id=${encodeURIComponent(deviceId)}&limit=${limit}`);
     if (!r.ok) return [];
