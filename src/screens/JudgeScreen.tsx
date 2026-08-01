@@ -17,9 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Judge'>;
 export default function JudgeScreen({ route, navigation }: Props) {
   const { theme } = useTheme();
   const t = theme.tokens;
-  const passedQuestion: Question | undefined = route.params?.question;
-
-  const [question] = useState<Question | undefined>(passedQuestion);
+  const question: Question | undefined = route.params?.question;
   const [answer, setAnswer] = useState('');
   const [running, setRunning] = useState(false);
   const [streamText, setStreamText] = useState('');
