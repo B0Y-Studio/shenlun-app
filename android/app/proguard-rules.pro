@@ -8,3 +8,12 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# Keep native bindings for libraries that break under ProGuard obfuscation
+-keep class com.facebook.react.** { *; }
+-keep class com.tencent.mmkv.** { *; }
+-keep class com.swmansion.rnscreens.** { *; }
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.th3rdwave.safeareacontext.** { *; }
+-keep class com.oblador.vectoricons.** { *; }
+-keepattributes Signature, *Annotation*
