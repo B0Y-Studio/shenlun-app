@@ -1,6 +1,6 @@
 // src/screens/PaperScreen.tsx
 // 题目 Tab: 真题库列表 + 详情（题干 / 答案 切换）
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable,
   ActivityIndicator, FlatList, TextInput, RefreshControl,
@@ -239,12 +239,6 @@ export default function PaperScreen() {
   }
 
   // List view
-  const years = useMemo(() => {
-    const set = new Set<number>();
-    papers.forEach(p => set.add(p.year));
-    return Array.from(set).sort((a, b) => b - a);
-  }, [papers]);
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
       {/* 顶部筛选 */}
