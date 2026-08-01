@@ -16,6 +16,7 @@
     "build:release": "npm run bundle:release && npm run _build:release"
   },
   "dependencies": {
+    "@react-navigation/bottom-tabs": "^7.18.14",
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "react": "18.2.0",

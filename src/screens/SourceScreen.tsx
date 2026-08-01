@@ -12,16 +12,16 @@
 //     屏内 tabBus 切换 filter 不会刷新数据（按需重 fetch 即可）
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
-import { useActiveFilter } from '../App';
 import { ModeTabs } from '../components/ModeTabs';
 import { ArticleCard } from '../components/ArticleCard';
 import { getArticles } from '../api/client';
 import type { Article } from '../storage/mmkv';
 import type { RootStackParamList } from '../App';
+import type { MainTabParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -72,9 +72,10 @@ export default function SourceScreen() {
   const { theme } = useTheme();
   const t = theme.tokens;
   const nav = useNavigation<NavProp>();
-  const activeFilter = useActiveFilter();
+  const route = useRoute<RouteProp<MainTabParamList, 'Source'>>();
+  const activeFilter = route.params?.filter ?? {};
 
-  // 记录 tabBus 预填的 theme（只取一次，挂载后不应跟随 activeFilter 变化被覆盖）
+  // 记录 预填的 theme（只取一次，挂载后不应跟随 activeFilter 变化被覆盖）
   const presetThemeRef = useRef<string | null>(
     (activeFilter?.theme as string) ?? null
   );

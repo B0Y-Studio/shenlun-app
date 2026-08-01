@@ -1,9 +1,10 @@
 // src/App.tsx
 // V3 定稿壳：5 个 Tab + Stack 推入 Reader/Review/Gold
-import React, { useState, useMemo, useEffect, createContext, useContext } from 'react';
-import { StatusBar, View, StyleSheet } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './theme/ThemeContext';
 import { TabBar } from './components/TabBar';
@@ -21,7 +22,6 @@ import LlmConfigScreen from './screens/LlmConfigScreen';
 import type { Question } from './api/client';
 import { SplashScreen } from './components/SplashScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { tabBus } from './navigation/tabBus';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -33,38 +33,40 @@ export type RootStackParamList = {
   LlmConfig: undefined;
 };
 
-/** 主屏内可由 tabBus 带过来的过滤项（如 source 主题过滤） */
-const ActiveFilterContext = createContext<Record<string, any>>({});
-/** 暴露给 SourceScreen 等需要读 filter 的屏 */
-export const useActiveFilter = () => useContext(ActiveFilterContext);
+type MainTabParamList = {
+  Home: undefined;
+  Source: { filter?: Record<string, unknown> } | undefined;
+  Paper: undefined;
+  Analysis: undefined;
+  Settings: undefined;
+};
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const MainTab = createBottomTabNavigator<MainTabParamList>();
 
-function MainTabs({ activeKey, setActiveKey }: { activeKey: string; setActiveKey: (k: string) => void }) {
+function MainTabs() {
+  const { theme } = useTheme();
   return (
-    <View style={styles.fill}>
-      {activeKey === 'home'     && <HomeScreen />}
-      {activeKey === 'source'   && <SourceScreen />}
-      {activeKey === 'paper'    && <PaperScreen />}
-      {activeKey === 'analysis' && <AnalysisScreen />}
-      {activeKey === 'settings' && <SettingsScreen />}
-      <TabBar activeKey={activeKey} onChange={setActiveKey} />
-    </View>
+    <MainTab.Navigator
+      screenOptions={{ headerShown: false }}
+      tabBar={({ navigation, state }) => (
+        <TabBar
+          activeKey={state.routes[state.index].name.toLowerCase()}
+          onChange={(k) => navigation.navigate(k.charAt(0).toUpperCase() + k.slice(1) as never)}
+        />
+      )}
+    >
+      <MainTab.Screen name="Home" component={HomeScreen} />
+      <MainTab.Screen name="Source" component={SourceScreen} />
+      <MainTab.Screen name="Paper" component={PaperScreen} />
+      <MainTab.Screen name="Analysis" component={AnalysisScreen} />
+      <MainTab.Screen name="Settings" component={SettingsScreen} />
+    </MainTab.Navigator>
   );
 }
 
 function RootNavigator() {
   const { theme } = useTheme();
-  const [activeKey, setActiveKey] = useState<string>('home');
-  const [activeFilter, setActiveFilter] = useState<Record<string, any>>({});
-
-  // 注册 tabBus 监听：setActiveKey + 同步 activeFilter
-  useEffect(() => {
-    return tabBus.bind((k, payload) => {
-      setActiveKey(k);
-      if (payload?.filter) setActiveFilter(payload.filter);
-    });
-  }, []);
 
   const stackScreenOptions = useMemo(() => ({
     headerShown: false,
@@ -80,13 +82,7 @@ function RootNavigator() {
       />
       <NavigationContainer>
         <Stack.Navigator screenOptions={stackScreenOptions}>
-          <Stack.Screen name="Main">
-            {() => (
-              <ActiveFilterContext.Provider value={activeFilter}>
-                <MainTabs activeKey={activeKey} setActiveKey={setActiveKey} />
-              </ActiveFilterContext.Provider>
-            )}
-          </Stack.Screen>
+          <Stack.Screen name="Main" component={MainTabs} />
           <Stack.Screen name="Review" component={ReviewScreen} />
           <Stack.Screen name="Reader" component={ReaderScreen} />
           <Stack.Screen name="Gold" component={GoldScreen} />
@@ -116,7 +112,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-});
