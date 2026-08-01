@@ -36,7 +36,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from collections import Counter
-from judge_db import FERNET_KEY_ENV  # 用于启动 banner 显示 fernet key 来源
+from judge_db import FERNET_KEY_ENV, extract_json_by_brace_depth  # 用于启动 banner + SSE history JSON 提取
 
 # === 路径配置 (跨平台) ===
 # 通过环境变量或默认值设置 OUT_DIR
@@ -277,35 +277,19 @@ class CardHandler(BaseHTTPRequestHandler):
         ).start()
 
     def _save_judge_history(self, jdb, device_id, question, user_answer, full_text):
-        import re
-        # 按括号深度切 JSON
-        start = full_text.find('{')
-        if start < 0:
-            response_json = full_text
-            total = 0
-        else:
-            depth = 0
-            end = -1
-            for i in range(start, len(full_text)):
-                c = full_text[i]
-                if c == '{':
-                    depth += 1
-                elif c == '}':
-                    depth -= 1
-                    if depth == 0:
-                        end = i + 1
-                        break
-            if end > start:
-                try:
-                    parsed = json.loads(full_text[start:end])
-                    response_json = json.dumps(parsed, ensure_ascii=False)
-                    total = int(parsed.get('total', 0))
-                except Exception:
-                    response_json = full_text
-                    total = 0
-            else:
+        # Extract JSON by brace depth (uses string-aware helper).
+        snippet = extract_json_by_brace_depth(full_text)
+        if snippet:
+            try:
+                parsed = json.loads(snippet)
+                response_json = json.dumps(parsed, ensure_ascii=False)
+                total = int(parsed.get('total', 0))
+            except Exception:
                 response_json = full_text
                 total = 0
+        else:
+            response_json = full_text
+            total = 0
         jdb.save_history({
             'device_id': device_id,
             'question_id': question.get('id', ''),

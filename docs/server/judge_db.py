@@ -14,6 +14,44 @@ KEY_FILE_NAME = '.fernet_key'
 RATE_WINDOW_SEC = 60
 
 
+def extract_json_by_brace_depth(text: str) -> str | None:
+    """Extract the first top-level {...} JSON object from `text`, skipping over
+    braces that appear inside quoted strings. Returns the JSON substring (as a
+    string, NOT parsed) or None if no complete top-level object is found.
+
+    Mirrors the client-side TypeScript implementation in
+    `ShenlunApp/src/llm/client.ts:extractJsonByBraceDepth` so server-side
+    history extraction and client-side result parsing agree on what counts as
+    a valid JSON object.
+    """
+    start = text.find('{')
+    if start < 0:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if esc:
+            esc = False
+            continue
+        if c == '\\':
+            esc = True
+            continue
+        if c == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
 class JudgeDB:
     def __init__(self, db_path: str, records_dir: str) -> None:
         self.db_path = db_path
