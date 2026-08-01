@@ -63,3 +63,6 @@ __pycache__/
 # ─── 大型压缩包（不入仓） ───
 *.zip
 !ShenlunApp_V3_AndroidStudio-source.zip
+
+# Release keystore (Plan D will generate)
+*.keystore
