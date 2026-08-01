@@ -106,37 +106,47 @@ export async function* runJudge(
   const decoder = new TextDecoder('utf-8');
   let buf = '';
   let fullText = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf('\n\n')) >= 0) {
-      const evt = buf.slice(0, nl);
-      buf = buf.slice(nl + 2);
-      const line = evt.split('\n').find(l => l.startsWith('data:'));
-      if (!line) continue;
-      const payload = line.slice(5).trim();
-      if (payload === '[DONE]') {
-        const result = safeParseJudgeResult(fullText);
-        yield { type: 'result', result, raw: fullText };
-        return;
-      }
-      try {
-        const obj = JSON.parse(payload);
-        if (obj.error) {
-          yield { type: 'error', code: 'upstream', message: String(obj.error) };
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf('\n\n')) >= 0) {
+        const evt = buf.slice(0, nl);
+        buf = buf.slice(nl + 2);
+        const line = evt.split('\n').find(l => l.startsWith('data:'));
+        if (!line) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') {
+          const result = safeParseJudgeResult(fullText);
+          yield { type: 'result', result, raw: fullText };
           return;
         }
-        if (typeof obj.delta === 'string') {
-          fullText += obj.delta;
-          opts.onDelta?.(obj.delta);
-          yield { type: 'delta', text: obj.delta };
+        try {
+          const obj = JSON.parse(payload);
+          if (obj.error) {
+            yield { type: 'error', code: 'upstream', message: String(obj.error) };
+            return;
+          }
+          if (typeof obj.delta === 'string') {
+            fullText += obj.delta;
+            opts.onDelta?.(obj.delta);
+            yield { type: 'delta', text: obj.delta };
+          }
+        } catch {
+          // 忽略非 JSON 行
         }
-      } catch {
-        // 忽略非 JSON 行
       }
     }
+  } catch (e) {
+    // AbortError 是用户主动取消，静默；其它错误上报
+    if (!(e instanceof Error && e.name === 'AbortError')) {
+      yield { type: 'error', code: 'stream', message: e instanceof Error ? e.message : String(e) };
+    }
+    return;
+  } finally {
+    try { reader.releaseLock(); } catch { /* ignore */ }
   }
   // 流未正常 DONE
   const result = safeParseJudgeResult(fullText);

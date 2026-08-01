@@ -82,6 +82,11 @@ export default function JudgeScreen({ route, navigation }: Props) {
           Alert.alert('评卷失败', `${evt.code}: ${evt.message}`);
         }
       }
+    } catch (e) {
+      // AbortError 是用户主动取消，静默；其它错误提示
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        Alert.alert('评卷中断', e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setRunning(false);
       abortRef.current = null;
