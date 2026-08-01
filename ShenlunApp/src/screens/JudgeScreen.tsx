@@ -3,10 +3,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
-import { runJudge, type JudgeResult, safeParseJudgeResult } from '../llm/client';
+import { runJudge, type JudgeResult } from '../llm/client';
 import { addLocalRecord } from '../llm/judgeStore';
 import { fetchLlmConfig } from '../api/llmConfig';
 import { getDeviceId } from '../storage/mmkv';
@@ -19,7 +19,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
   const t = theme.tokens;
   const passedQuestion: Question | undefined = route.params?.question;
 
-  const [question, setQuestion] = useState<Question | undefined>(passedQuestion);
+  const [question] = useState<Question | undefined>(passedQuestion);
   const [answer, setAnswer] = useState('');
   const [running, setRunning] = useState(false);
   const [streamText, setStreamText] = useState('');
@@ -35,12 +35,20 @@ export default function JudgeScreen({ route, navigation }: Props) {
     })();
   }, []);
 
+  // Cleanup: abort any in-flight SSE stream if the screen unmounts mid-run
+  // (e.g. user backs out). Without this the upstream connection leaks.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const onStart = useCallback(async () => {
     if (!question) { Alert.alert('未选题目'); return; }
     if (answer.trim().length < 50) { Alert.alert('答案太短', '至少 50 字'); return; }
     if (!hasConfig) {
       Alert.alert('未配置 LLM', '请到设置 → AI 评卷配置 Key', [
-        { text: '去配置', onPress: () => navigation.navigate('LlmConfig' as never) },
+        { text: '去配置', onPress: () => navigation.navigate('LlmConfig') },
         { text: '取消', style: 'cancel' },
       ]);
       return;
@@ -82,7 +90,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
     }
   }, [question, answer, hasConfig, navigation]);
 
-  const onCancel = () => abortRef.current?.abort();
+  const onCancel = useCallback(() => abortRef.current?.abort(), []);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -91,7 +99,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
           <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>
         </Pressable>
         <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]}>AI 评卷</Text>
-        <Pressable onPress={() => navigation.navigate('JudgeHistory' as never)} hitSlop={8}>
+        <Pressable onPress={() => navigation.navigate('JudgeHistory')} hitSlop={8}>
           <Text style={[styles.historyText, { color: t.brassDeep, fontFamily: fonts.kai.bold }]}>历史</Text>
         </Pressable>
       </View>
@@ -109,7 +117,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
           </View>
         ) : (
           <Pressable
-            onPress={() => navigation.navigate('Main' as never)}
+            onPress={() => navigation.navigate('Main')}
             style={[styles.qCard, { backgroundColor: t.paper, borderColor: t.border }]}
           >
             <Text style={[styles.qTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}>暂未选题目</Text>
@@ -129,7 +137,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
           placeholderTextColor={t.inkFaint}
           style={[styles.input, { backgroundColor: t.paper, borderColor: t.border, color: t.ink, fontFamily: fonts.kai.regular }]}
         />
-        <Text style={[styles.countText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>字数：{answer.length}</Text>
+        <Text style={[styles.countText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>字数：{answer.trim().length}</Text>
 
         {!running ? (
           <Pressable
