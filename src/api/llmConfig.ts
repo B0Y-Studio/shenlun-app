@@ -2,7 +2,7 @@
 import { getDeviceId } from '../storage/mmkv';
 import type { LlmConfig } from '../llm/provider';
 
-const BASE = 'http://124.223.5.144';
+import { API_BASE as BASE } from '../config/api';
 
 export interface RemoteLlmConfig {
   configured: boolean;

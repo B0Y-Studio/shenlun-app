@@ -2,7 +2,7 @@
 import { getDeviceId } from '../storage/mmkv';
 import type { Question } from '../api/client';
 
-const BASE = 'http://124.223.5.144';
+import { API_BASE as BASE } from '../config/api';
 
 export interface JudgeDimension { key: string; score: number; comment: string }
 export interface JudgeResult {

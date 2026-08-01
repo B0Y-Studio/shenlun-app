@@ -2,7 +2,7 @@
 import { getDeviceId, getCachedArticles, setCachedArticles, type Article, type Note } from '../storage/mmkv';
 export type { Article, Note };
 
-const BASE = 'http://124.223.5.144';
+import { API_BASE as BASE } from '../config/api';
 
 function deviceId(): string { return getDeviceId(); }
 
