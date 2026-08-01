@@ -5,7 +5,7 @@ import { MMKV } from 'react-native-mmkv';
 let storage: MMKV | null = null;
 let storageFailed = false;
 
-function getStorage(): MMKV | null {
+export function getStorage(): MMKV | null {
   if (storageFailed) return null;
   if (storage) return storage;
   try {
