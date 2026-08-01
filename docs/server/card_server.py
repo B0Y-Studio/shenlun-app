@@ -269,6 +269,14 @@ class CardHandler(BaseHTTPRequestHandler):
             return
 
         # 异步存 history
+        # V1 KNOWN LIMITATION: spawned as `daemon=True` so a `systemctl restart`
+        # mid-write will kill the thread without flushing. Trade-off: simple
+        # code, no SIGTERM drain. Loss window: ~1-2 history records during a
+        # restart. Acceptable for V1 single-tenant hobby use. To eliminate,
+        # V1.2 should: (a) drain on SIGTERM, or (b) write to a queue that the
+        # next startup drains, or (c) use `threading.Thread(daemon=False)` +
+        # `server.shutdown()` waits for in-flight to finish. See final review
+        # Important #2.
         full_text = ''.join(full)
         threading.Thread(
             target=self._save_judge_history,

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # 在 124.223.5.144 上跑的部署脚本
 # 作用：拉新代码、装 cryptography、重启 card_server
+# V1 已知限制：_save_judge_history 是 daemon 线程，systemctl restart 可能
+# 丢失 ~1-2 条评卷历史（窗口期内的 in-flight 写入）。V1.2 应在 SIGTERM
+# 时 drain in-flight writes。
 set -euo pipefail
 
 REMOTE_HOST="${REMOTE_HOST:-root@124.223.5.144}"
