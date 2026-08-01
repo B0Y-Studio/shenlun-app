@@ -4,7 +4,7 @@
 // - 中部: ModeTabs「按月 | 按主题」，默认按月
 // - 主体: 已读文章分组列表，每条卡片带日期 + 标题 + 来源/作者 + tag chip
 // - 主体底部: 案牍劳形 不废研读
-// - tag chip 点击 → tabBus.set('source', { filter: { theme } })
+// - tag chip 点击 → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } })
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +15,6 @@ import { getReadIds, getCachedArticles } from '../storage/mmkv';
 import { getArticlesByIds } from '../api/client';
 import type { Article } from '../api/client';
 import { ModeTabs } from '../components/ModeTabs';
-import { tabBus } from '../navigation/tabBus';
 import type { RootStackParamList } from '../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Review'>;
@@ -92,8 +91,10 @@ export default function ReviewScreen(props: Props) {
   }, [articles, mode]);
 
   const onJumpToSource = useCallback((themeKey: string) => {
-    tabBus.set('source', { filter: { theme: themeKey } });
-  }, []);
+    // ReviewScreen 是 Stack.Screen 'Review'（Main 的兄弟屏），
+    // useNavigation 拿到的是 root stack，跳到 Main 内的 Tab 必须用嵌套 navigate 形式
+    navigation.navigate('Main', { screen: 'Source', params: { filter: { theme: themeKey } } });
+  }, [navigation]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>

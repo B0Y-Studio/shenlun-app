@@ -14,7 +14,6 @@ import { TodayTaskBanner } from '../components/TodayTaskBanner';
 import { MenuList } from '../components/MenuList';
 import { getDaily, type Article } from '../api/client';
 import { getReadIds, markRead } from '../storage/mmkv';
-import { tabBus } from '../navigation/tabBus';
 import type { RootStackParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -117,14 +116,16 @@ export default function HomeScreen() {
     // 主菜单项 → 切换外层 Tab 或推子页
     if (key === 'review') { navigation.navigate('Review'); return; }
     if (key === 'note')   { navigation.navigate('Gold'); return; }
-    // source/paper/analysis：请求切 Tab
-    const tabMap: Record<string, string> = {
-      source:   'source',
-      paper:    'paper',
-      analysis: 'analysis',
+    // source/paper/analysis：请求切到 Main 下的某个 Tab
+    // 这里 HomeScreen 是 Stack.Screen 'Main' 的子屏，useNavigation 拿到的是 root stack
+    // 跳到嵌套 Tab Navigator 必须用 navigation.navigate('Main', { screen, params }) 形式
+    const tabMap: Record<string, 'Source' | 'Paper' | 'Analysis'> = {
+      source:   'Source',
+      paper:    'Paper',
+      analysis: 'Analysis',
     };
     const target = tabMap[key];
-    if (target) tabBus.set(target);
+    if (target) navigation.navigate('Main', { screen: target });
   };
 
   return (

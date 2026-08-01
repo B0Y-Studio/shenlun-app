@@ -2,14 +2,11 @@
 // 素材学习 Tab —— 按主题/来源/日期 查看全量素材库（V3 风格）
 // 数据源：服务端 POST /api/articles（带过滤）
 // 离线降级：服务端失败时返回 MMKV 缓存
-// 跳转协议：从 ReviewScreen 点 tag chip → tabBus.set('source', { filter: { theme } }) 预填主题
-//   presetThemeRef: 挂载时一次性快照 activeFilter?.theme
-//   - 当前架构: MainTabs 用 {activeKey === 'source' && <SourceScreen />} 条件渲染，
-//     切 Tab 时 SourceScreen 会 unmount→remount，每次挂载重新读 activeFilter
-//   - 当前 ref 等价于 useState，保留 ref 是为了未来切到 React Navigation Tab Navigator
-//     (keep-alive) 时仍然有效，注释里说明这个前提
-//   - 副作用：若 MainTabs 未来改成 keep-alive (lazy=false, unmountOnBlur=false)，
-//     屏内 tabBus 切换 filter 不会刷新数据（按需重 fetch 即可）
+// 跳转协议：从 ReviewScreen 点 tag chip → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } }) 预填主题
+//   presetThemeRef: 挂载时一次性快照 route.params.filter?.theme
+//   - 当前架构: MainTabs 已切到 React Navigation bottom-tabs（keep-alive，屏不会 unmount）
+//     route.params 变化时屏内 effect 重新拉取数据即可
+//   - 副作用：若外部深链接切换 filter，屏不会重建，靠 presetThemeRef 重 fetch 触发刷新
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';

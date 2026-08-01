@@ -13,7 +13,6 @@ import {
   getLocalNotes, type Article,
 } from '../storage/mmkv';
 import { getAnalyticsSummary } from '../api/client';
-import { tabBus } from '../navigation/tabBus';
 import type { RootStackParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -88,12 +87,14 @@ export default function AnalysisScreen() {
   }, [stats]);
 
   const onJumpToSource = useCallback((key: string) => {
-    tabBus.set('source', { filter: { theme: key } });
-  }, []);
+    // AnalysisScreen 是 Stack.Screen 'Main' 的子屏，useNavigation 拿到的是 root stack
+    // 跳到嵌套 Tab Navigator 必须用 navigation.navigate('Main', { screen, params }) 形式
+    nav.navigate('Main', { screen: 'Source', params: { filter: { theme: key } } });
+  }, [nav]);
 
   const onJumpToPaper = useCallback(() => {
-    tabBus.set('paper');
-  }, []);
+    nav.navigate('Main', { screen: 'Paper' });
+  }, [nav]);
 
   const onAIJudge = useCallback(() => {
     nav.navigate('Judge', { question: undefined });
