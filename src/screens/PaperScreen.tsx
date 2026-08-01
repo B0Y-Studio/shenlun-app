@@ -5,6 +5,7 @@ import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable,
   ActivityIndicator, FlatList, TextInput, RefreshControl,
 } from 'react-native';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { getPapers, getPaper, getQuestions, type Paper, type PaperDetail, type Question } from '../api/client';
@@ -33,6 +34,8 @@ export default function PaperScreen() {
   const [total, setTotal] = useState(0);
   const [yearFilter, setYearFilter] = useState<string>('');
   const [provinceFilter, setProvinceFilter] = useState<string>('');
+  const debouncedYear = useDebouncedValue(yearFilter, 400);
+  const debouncedProvince = useDebouncedValue(provinceFilter, 400);
   const [detail, setDetail] = useState<PaperDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [qaTab, setQaTab] = useState<QaTab>('q');
@@ -46,8 +49,8 @@ export default function PaperScreen() {
     try {
       const resp = await getPapers({
         level,
-        year: yearFilter ? Number(yearFilter) : undefined,
-        province: level === 'shengkao' && provinceFilter ? provinceFilter : undefined,
+        year: debouncedYear ? Number(debouncedYear) : undefined,
+        province: level === 'shengkao' && debouncedProvince ? debouncedProvince : undefined,
         pageSize: 50,
       });
       setPapers(resp.items);
@@ -58,7 +61,7 @@ export default function PaperScreen() {
     } finally {
       setLoading(false);
     }
-  }, [level, yearFilter, provinceFilter]);
+  }, [level, debouncedYear, debouncedProvince]);
 
   useEffect(() => { loadPapers(); }, [loadPapers]);
 
