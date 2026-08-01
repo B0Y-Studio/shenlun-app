@@ -103,7 +103,7 @@ export default function PaperScreen() {
           </Text>
           <Pressable
             onPress={() => nav.navigate('Judge', { question: activeQ })}
-            style={styles.aiBtn}
+            style={[styles.aiBtn, { backgroundColor: t.seal, borderColor: t.sealDeep }]}
           >
             <Text style={[styles.aiBtnText, { color: t.paper, fontFamily: fonts.serif.bold }]}>🤖 评卷</Text>
           </Pressable>
@@ -391,6 +391,6 @@ const styles = StyleSheet.create({
   },
   qSourceLine: { fontSize: fontSizes.caption, letterSpacing: 1, lineHeight: 20 },
 
-  aiBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: '#C04851', borderRadius: radii.sm },
+  aiBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.sm },
   aiBtnText: { fontSize: fontSizes.caption },
 });
