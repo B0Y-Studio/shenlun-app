@@ -3,27 +3,32 @@ import { getDeviceId, getCachedArticles, setCachedArticles, type Article, type N
 export type { Article, Note };
 
 import { API_BASE as BASE } from '../config/api';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 function deviceId(): string { return getDeviceId(); }
 
+function mapArticle(card: any): Article {
+  return {
+    id: card.id ?? card.file_path ?? card.title,
+    chapter: card.tags?.[0] ?? '',
+    title: card.title,
+    date: card.date,
+    content: card.content ?? card.norm ?? '',
+    highlight: card.highlight ?? '',
+    source: card.source ?? '',
+    author: card.author ?? '',
+    norm: card.norm ?? '',
+  };
+}
+
 export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<Article[]> {
   try {
-    const res = await fetch(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
+    const res = await fetchWithTimeout(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     // /api/today 返回: { date, count, cards: [{ id, norm, title, date, content, source, author, tags, highlight, file_path }] }
     // 这里只取前端需要的字段，缺失时降级（id 退回 file_path / title；content 退回 norm）
-    const articles: Article[] = (data.cards ?? []).map((card: any) => ({
-      id: card.id ?? card.file_path ?? card.title,
-      chapter: card.tags?.[0] ?? '',
-      title: card.title,
-      date: card.date,
-      content: card.content ?? card.norm ?? '',
-      highlight: card.highlight ?? '',
-      source: card.source ?? '',
-      author: card.author ?? '',
-      norm: card.norm ?? '',
-    }));
+    const articles: Article[] = (data.cards ?? []).map(mapArticle);
     setCachedArticles(articles);
     return articles;
   } catch {
@@ -35,9 +40,9 @@ export async function getArticle(id: string): Promise<Article | null> {
   try {
     // id 是 file_path（含中文 / 斜杠 / `&` 等），必须 encodeURIComponent
     const url = `${BASE}/api/article/${encodeURIComponent(id)}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
-    return await res.json();
+    return mapArticle(await res.json());
   } catch {
     return null;
   }
@@ -49,7 +54,7 @@ export async function getArticlesByIds(ids: string[]): Promise<{items: Article[]
   if (!ids.length) return { items: [], missing: [] };
   try {
     const url = `${BASE}/api/articles?id-list=${encodeURIComponent(ids.join(','))}&device_id=${deviceId()}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return { items: [], missing: ids };
     const data = await res.json();
     const items: Article[] = (data.items ?? []).map((card: any) => ({
@@ -107,7 +112,7 @@ export async function getArticles(opts: {
     body.pageSize = opts.pageSize ?? 50;
     if (opts.with_summary) body.with_summary = 1;
 
-    const res = await fetch(`${BASE}/api/articles`, {
+    const res = await fetchWithTimeout(`${BASE}/api/articles`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -116,12 +121,14 @@ export async function getArticles(opts: {
     const data = await res.json();
     // 服务端 items: [{ id, norm, title, date, source, author, tags, category, source_type, month, url, file_path }]
     // → Article: id 保留 file_path，chapter=source，theme=tags[0]，tags 保留
+    // 注意：这里保留了原有的 content=summary / chapter=source / theme / tags 字段，
+    // 因为 getArticles 与 mapArticle 的语义不同（前者用 summary 作为卡片预览，后者用 content/norm），
+    // 强行共用 mapArticle 会让 SourceScreen 看到空 content（mapArticle 用 content ?? norm，但服务端 items 不含 content）
     const items: Article[] = (data.items ?? []).map((it: any) => ({
       id: it.id ?? it.file_path ?? it.title,
       chapter: it.source || '',
       title: it.title || '',
       date: it.date || '',
-      // 有 with_summary 时用服务端 summary，没有就空字符串
       content: it.summary || '',
       highlight: '',
       source: it.source || '',
@@ -176,7 +183,7 @@ export interface AnalyticsSummary {
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   try {
     const url = `${BASE}/api/analytics/summary?device_id=${deviceId()}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error('API error');
     const d = await res.json();
     return { ...d, online: true };
@@ -206,7 +213,7 @@ export interface AnalyticsThemes {
 export async function getAnalyticsThemes(top = 10): Promise<AnalyticsThemes> {
   try {
     const url = `${BASE}/api/analytics/themes?device_id=${deviceId()}&top=${top}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error('API error');
     const d = await res.json();
     return { ...d, online: true };
@@ -231,7 +238,7 @@ export async function markReadRemote(article: Article): Promise<boolean> {
       // 缺 norm（缓存中极旧的 article 没存 norm）或缺 title（服务端必拒）→ 跳过
       return false;
     }
-    const res = await fetch(`${BASE}/api/mark-read`, {
+    const res = await fetchWithTimeout(`${BASE}/api/mark-read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -287,7 +294,7 @@ export async function getPapers(opts: {
     if (opts.q) params.set('q', opts.q);
     if (opts.page) params.set('page', String(opts.page));
     if (opts.pageSize) params.set('pageSize', String(opts.pageSize));
-    const res = await fetch(`${BASE}/api/papers?${params}`);
+    const res = await fetchWithTimeout(`${BASE}/api/papers?${params}`);
     if (!res.ok) return { items: [], total: 0, page: 1, pageSize: 50 };
     return await res.json();
   } catch {
@@ -303,7 +310,7 @@ export interface PaperDetail extends Paper {
 export async function getPaper(id: string): Promise<PaperDetail | null> {
   try {
     const url = `${BASE}/api/paper?id=${encodeURIComponent(id)}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
     const data = await res.json();
     if (data.error) return null;
@@ -334,7 +341,7 @@ export interface QuestionsResp {
 export async function getQuestions(paperId: string): Promise<QuestionsResp> {
   try {
     const url = `${BASE}/api/questions?paper_id=${encodeURIComponent(paperId)}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return { items: [], total: 0, paper_id: paperId };
     return await res.json();
   } catch {
@@ -344,7 +351,7 @@ export async function getQuestions(paperId: string): Promise<QuestionsResp> {
 
 export async function getNotes(): Promise<Note[]> {
   try {
-    const res = await fetch(`${BASE}/api/notes?device_id=${deviceId()}`);
+    const res = await fetchWithTimeout(`${BASE}/api/notes?device_id=${deviceId()}`);
     if (!res.ok) return [];
     const data = await res.json();
     return data.notes ?? [];
@@ -355,7 +362,7 @@ export async function getNotes(): Promise<Note[]> {
 
 export async function postNote(note: Omit<Note, 'id'>): Promise<Note | null> {
   try {
-    const res = await fetch(`${BASE}/api/notes`, {
+    const res = await fetchWithTimeout(`${BASE}/api/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...note, device_id: deviceId() }),

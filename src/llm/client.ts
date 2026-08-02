@@ -3,6 +3,7 @@ import { getDeviceId } from '../storage/mmkv';
 import type { Question } from '../api/client';
 
 import { API_BASE as BASE } from '../config/api';
+import { fetchWithTimeout } from '../api/fetchWithTimeout';
 
 export interface JudgeDimension { key: string; score: number; comment: string }
 export interface JudgeResult {
@@ -72,7 +73,7 @@ export async function* runJudge(
 ): AsyncGenerator<JudgeEvent> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}/api/judge/run`, {
+    res = await fetchWithTimeout(`${BASE}/api/judge/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

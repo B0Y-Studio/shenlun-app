@@ -77,6 +77,9 @@ export default function SourceScreen() {
     (activeFilter?.theme as string) ?? null
   );
 
+  // M5: 请求 id 计数器，用于丢弃被新请求超越的过期响应（避免快速切换 filter 时旧数据覆盖新数据）
+  const reqIdRef = useRef(0);
+
   const [mode, setMode] = useState<Mode>('theme');
   // 初始 activeGroup 来自 presetTheme，让"全部"chip 之外的初始选中态正确
   const [activeGroup, setActiveGroup] = useState<string | null>(presetThemeRef.current);
@@ -90,6 +93,8 @@ export default function SourceScreen() {
   const fetchPage = useCallback(async (overrideMode?: Mode, overrideGroup?: string | null) => {
     const m = overrideMode ?? mode;
     const g = overrideGroup ?? activeGroup;
+    // M5: 抢占式请求 id，await 后比对丢弃过期响应
+    const myId = ++reqIdRef.current;
     setLoading(true);
     setErrorMsg(null);
     const opts: Parameters<typeof getArticles>[0] = { pageSize: 100, with_summary: true };
@@ -98,13 +103,15 @@ export default function SourceScreen() {
     if (m === 'date' && g)   opts.date   = g;
     try {
       const resp = await getArticles(opts);
+      if (myId !== reqIdRef.current) return; // 被更新的请求超越，丢弃
       setArticles(resp.items);
       setTotal(resp.total);
       setOnline(resp.online);
     } catch (e: any) {
+      if (myId !== reqIdRef.current) return;
       setErrorMsg(e?.message ?? '未知错误');
     } finally {
-      setLoading(false);
+      if (myId === reqIdRef.current) setLoading(false);
     }
   }, [mode, activeGroup]);
 

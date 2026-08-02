@@ -24,7 +24,7 @@ const memoryStore: Record<string, string> = {};
 function setValue(key: string, value: string): void {
   const s = getStorage();
   if (s) {
-    try { s.set(key, value); return; } catch {}
+    try { s.set(key, value); return; } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); }
   }
   memoryStore[key] = value;
 }
@@ -32,7 +32,7 @@ function setValue(key: string, value: string): void {
 function getValue(key: string): string | undefined {
   const s = getStorage();
   if (s) {
-    try { return s.getString(key); } catch {}
+    try { return s.getString(key); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); }
   }
   return memoryStore[key];
 }
@@ -74,18 +74,18 @@ export interface Note {
 export function getCachedArticles(): Article[] {
   const raw = getValue('cached_articles');
   if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return []; }
+  try { return JSON.parse(raw); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); return []; }
 }
 
 export function setCachedArticles(articles: Article[]): void {
-  try { setValue('cached_articles', JSON.stringify(articles)); } catch {}
+  try { setValue('cached_articles', JSON.stringify(articles)); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); }
 }
 
 // 已读文章 id 列表（按文章 id，不按日期；想按日期自行扩展）
 export function getReadIds(): string[] {
   const raw = getValue('read_ids');
   if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return []; }
+  try { return JSON.parse(raw); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); return []; }
 }
 
 export function markRead(articleId: string): void {
@@ -106,7 +106,7 @@ export interface ReadHistoryItem { id: string; at: number; }
 export function getReadHistory(): ReadHistoryItem[] {
   const raw = getValue('read_history');
   if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return []; }
+  try { return JSON.parse(raw); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); return []; }
 }
 
 // 给定 article 列表，返回"今日已读"的篇数（按文章 id 命中）
@@ -128,7 +128,7 @@ export function countReadsInWindow(windowMs: number): number {
 export function getLocalNotes(): Note[] {
   const raw = getValue('local_notes');
   if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return []; }
+  try { return JSON.parse(raw); } catch (e) { __DEV__ && console.warn('[mmkv] operation failed:', e); return []; }
 }
 
 export function addLocalNote(note: Note): void {

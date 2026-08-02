@@ -3,6 +3,7 @@ import { getDeviceId } from '../storage/mmkv';
 import type { LlmConfig } from '../llm/provider';
 
 import { API_BASE as BASE } from '../config/api';
+import { fetchWithTimeout } from './fetchWithTimeout';
 
 export interface RemoteLlmConfig {
   configured: boolean;
@@ -14,7 +15,7 @@ export interface RemoteLlmConfig {
 
 export async function fetchLlmConfig(deviceId: string = getDeviceId()): Promise<RemoteLlmConfig> {
   try {
-    const r = await fetch(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`);
+    const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`);
     if (!r.ok) return { configured: false };
     return await r.json() as RemoteLlmConfig;
   } catch {
@@ -24,7 +25,7 @@ export async function fetchLlmConfig(deviceId: string = getDeviceId()): Promise<
 
 export async function saveLlmConfig(deviceId: string, cfg: LlmConfig): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/api/judge/llm-config`, {
+    const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -43,7 +44,7 @@ export async function saveLlmConfig(deviceId: string, cfg: LlmConfig): Promise<b
 
 export async function deleteLlmConfig(deviceId: string = getDeviceId()): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
+    const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
     return r.ok;
   } catch {
     return false;
@@ -64,7 +65,7 @@ export async function fetchJudgeHistory(deviceId: string, limit = 20): Promise<R
   // had `deviceId: string = getDeviceId()` default + `undefined` opt-in from call sites,
   // which was a code smell (final review Important #5).
   try {
-    const r = await fetch(`${BASE}/api/judge/history?device_id=${encodeURIComponent(deviceId)}&limit=${limit}`);
+    const r = await fetchWithTimeout(`${BASE}/api/judge/history?device_id=${encodeURIComponent(deviceId)}&limit=${limit}`);
     if (!r.ok) return [];
     const j = await r.json() as { items: any[] };
     return (j.items ?? []).map(it => ({
@@ -82,7 +83,7 @@ export async function fetchJudgeHistory(deviceId: string, limit = 20): Promise<R
 
 export async function deleteJudgeHistoryServer(id: string, deviceId: string = getDeviceId()): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/api/judge/${encodeURIComponent(id)}?device_id=${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
+    const r = await fetchWithTimeout(`${BASE}/api/judge/${encodeURIComponent(id)}?device_id=${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
     return r.ok;
   } catch {
     return false;
@@ -97,7 +98,7 @@ export async function deleteJudgeHistoryServer(id: string, deviceId: string = ge
  */
 export async function testLlmConnection(deviceId: string = getDeviceId()): Promise<{ ok: boolean; status: number }> {
   try {
-    const r = await fetch(`${BASE}/api/judge/run`, {
+    const r = await fetchWithTimeout(`${BASE}/api/judge/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

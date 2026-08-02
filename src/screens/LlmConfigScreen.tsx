@@ -19,8 +19,10 @@ export default function LlmConfigScreen() {
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const cfg = await fetchLlmConfig();
+      if (cancelled) return;
       if (cfg.configured) {
         const p = (cfg.provider as Provider) || 'custom';
         setProvider(p);
@@ -29,6 +31,7 @@ export default function LlmConfigScreen() {
       }
       setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const onPickProvider = (p: Provider) => {

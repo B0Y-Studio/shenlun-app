@@ -30,7 +30,18 @@ export default function JudgeHistoryScreen() {
     setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // M5: 屏卸载时取消异步加载，防止卸载后 setState 报警告
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setRecords(listLocalRecords(50));
+      const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
+      if (cancelled) return;
+      const localIds = new Set(listLocalRecords(200).map(r => r.id));
+      setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const onDelete = useCallback((id: string, isLocal: boolean) => {
     Alert.alert('删除记录', '确定删除？', [
