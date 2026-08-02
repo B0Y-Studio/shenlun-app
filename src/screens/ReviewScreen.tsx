@@ -6,7 +6,7 @@
 // - 主体底部: 案牍劳形 不废研读
 // - tag chip 点击 → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } })
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Pressable, SectionList, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -35,8 +35,9 @@ export default function ReviewScreen(props: Props) {
   const [loading, setLoading] = useState(true);
 
   // 加载：MMKV 已读 id → 缓存兜底 → /api/articles 补全
-  useEffect(() => {
+  const loadReviewData = useCallback(async () => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
       const ids = getReadIds();
       if (ids.length === 0) {
@@ -67,6 +68,15 @@ export default function ReviewScreen(props: Props) {
     return () => { cancelled = true; };
   }, []);
 
+  // M12: 挂载时加载 + 进入屏焦点（从 Reader 返回）时同步刷新
+  useEffect(() => {
+    loadReviewData();
+    const unsub = navigation.addListener('focus', () => {
+      loadReviewData();
+    });
+    return unsub;
+  }, [loadReviewData, navigation]);
+
   // 分组（按月 / 按主题）
   const groups = useMemo(() => {
     const buckets: Record<string, Article[]> = {};
@@ -96,6 +106,65 @@ export default function ReviewScreen(props: Props) {
     navigation.navigate('Main', { screen: 'Source', params: { filter: { theme: themeKey } } });
   }, [navigation]);
 
+  // M12: 把 group pairs 转成 SectionList sections（按 mode 分组的已读文章）
+  const sections = useMemo(() =>
+    groups.map(([key, list]) => ({ title: key, count: list.length, data: list })),
+    [groups]);
+
+  const renderItem = ({ item }: { item: Article }) => (
+    <Pressable
+      onPress={() => navigation.navigate('Reader', { id: item.id })}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: t.paper, borderColor: t.border },
+        pressed && { opacity: 0.85 },
+      ]}
+      android_ripple={{ color: `${t.brass}22` }}
+    >
+      <Text style={[styles.rowDate, { color: t.inkMuted, fontFamily: fonts.serif.regular }]}>
+        {(item.date ?? '').slice(5)}
+      </Text>
+      <View style={styles.rowBody}>
+        <Text
+          style={[styles.rowTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}
+          numberOfLines={2}
+        >
+          {item.title || '无题'}
+        </Text>
+        {(item.tags ?? []).slice(0, 4).length > 0 && (
+          <View style={styles.tagsRow}>
+            {(item.tags ?? []).slice(0, 4).map((tg: string) => (
+              <Pressable
+                key={tg}
+                onPress={() => onJumpToSource(tg)}
+                style={({ pressed }) => [
+                  styles.tag,
+                  { borderColor: t.brass },
+                  pressed && { backgroundColor: `${t.brass}22` },
+                ]}
+              >
+                <Text style={[styles.tagText, { color: t.brassDeep, fontFamily: fonts.kai.regular }]}>
+                  {tg}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {(item.source || item.author) ? (
+          <Text style={[styles.rowMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+            {item.source || ''}{item.source && item.author ? '  ·  ' : ''}{item.author || ''}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+
+  const renderSectionHeader = ({ section }: { section: { title: string; count: number } }) => (
+    <Text style={[styles.groupHead, { color: t.seal, fontFamily: fonts.kai.bold }]}>
+      {section.title}  ·  共 {section.count} 篇
+    </Text>
+  );
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
@@ -110,80 +179,33 @@ export default function ReviewScreen(props: Props) {
 
       <ModeTabs<Mode> value={mode} options={MODE_OPTIONS} onChange={setMode} />
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {loading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator color={t.brass} />
-            <Text style={[styles.loadingText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>加载中…</Text>
-          </View>
-        ) : articles.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-              暂无已读记录，去首页开始第一篇吧。
-            </Text>
-          </View>
-        ) : (
-          groups.map(([key, list]) => (
-            <View key={key} style={styles.group}>
-              <Text style={[styles.groupHead, { color: t.seal, fontFamily: fonts.kai.bold }]}>
-                {key}  ·  共 {list.length} 篇
-              </Text>
-              {list.map(a => (
-                <Pressable
-                  key={a.id}
-                  onPress={() => navigation.navigate('Reader', { id: a.id })}
-                  style={({ pressed }) => [
-                    styles.row,
-                    { backgroundColor: t.paper, borderColor: t.border },
-                    pressed && { opacity: 0.85 },
-                  ]}
-                  android_ripple={{ color: `${t.brass}22` }}
-                >
-                  <Text style={[styles.rowDate, { color: t.inkMuted, fontFamily: fonts.serif.regular }]}>
-                    {(a.date ?? '').slice(5)}
-                  </Text>
-                  <View style={styles.rowBody}>
-                    <Text
-                      style={[styles.rowTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}
-                      numberOfLines={2}
-                    >
-                      {a.title || '无题'}
-                    </Text>
-                    {(a.tags ?? []).slice(0, 4).length > 0 && (
-                      <View style={styles.tagsRow}>
-                        {(a.tags ?? []).slice(0, 4).map((tg: string) => (
-                          <Pressable
-                            key={tg}
-                            onPress={() => onJumpToSource(tg)}
-                            style={({ pressed }) => [
-                              styles.tag,
-                              { borderColor: t.brass },
-                              pressed && { backgroundColor: `${t.brass}22` },
-                            ]}
-                          >
-                            <Text style={[styles.tagText, { color: t.brassDeep, fontFamily: fonts.kai.regular }]}>
-                              {tg}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    {(a.source || a.author) ? (
-                      <Text style={[styles.rowMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
-                        {a.source || ''}{a.source && a.author ? '  ·  ' : ''}{a.author || ''}
-                      </Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))}
+      <SectionList<Article, { title: string; count: number }>
+        sections={sections}
+        keyExtractor={(item: Article) => item.id}
+        contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={renderSectionHeader}
+        renderItem={renderItem}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={t.brass} />
+              <Text style={[styles.loadingText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>加载中…</Text>
             </View>
-          ))
-        )}
-
-        <Text style={[styles.footer, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
-          案 牍 劳 形 · 不 废 研 读
-        </Text>
-      </ScrollView>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+                暂无已读记录，去首页开始第一篇吧。
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          <Text style={[styles.footer, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+            案 牍 劳 形 · 不 废 研 读
+          </Text>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -199,7 +221,7 @@ const styles = StyleSheet.create({
   back: { fontSize: fontSizes.body },
   title: { flex: 1, fontSize: fontSizes.subtitle, letterSpacing: 4, textAlign: 'center' },
   counter: { fontSize: fontSizes.caption, width: 70, textAlign: 'right', letterSpacing: 2 },
-  scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xxxl },
+  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xxxl },
   loading: { paddingVertical: spacing.xxxl, alignItems: 'center' },
   loadingText: { marginTop: spacing.sm, fontSize: fontSizes.body, letterSpacing: 4 },
   empty: { paddingVertical: spacing.xxxl, alignItems: 'center' },

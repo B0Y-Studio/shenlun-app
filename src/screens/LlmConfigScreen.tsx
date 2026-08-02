@@ -69,9 +69,14 @@ export default function LlmConfigScreen() {
       { text: '取消', style: 'cancel' },
       {
         text: '删除', style: 'destructive', onPress: async () => {
-          await deleteLlmConfig();
-          setApiKey('');
-          Alert.alert('已删除');
+          // M17: 依服务端返回判定 success / failure，分别提示
+          const ok = await deleteLlmConfig();
+          if (ok) {
+            setApiKey('');
+            Alert.alert('已删除');
+          } else {
+            Alert.alert('删除失败', '请重试');
+          }
         },
       },
     ]);

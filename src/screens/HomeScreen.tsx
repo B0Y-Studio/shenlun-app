@@ -31,8 +31,11 @@ export default function HomeScreen() {
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await getDaily({ signal });
-      setArticles(data);
+      // M14: getDaily 现在返回 {items, online}，解构使用
+      const { items, online } = await getDaily({ signal });
+      setArticles(items);
+      // 当前 HomeScreen 暂未对 offline 提示，本期先记录供后续迭代用
+      void online;
     } catch (e: any) {
       // AbortError 表示组件卸载 / 5s 超时 / fetch 被 controller.abort() 取消
       // 此时 setArticles([]) 会清掉 state 里的内容（包括之前 fetch 成功的缓存）

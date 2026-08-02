@@ -15,23 +15,45 @@ export default function GoldScreen(props: Props) {
   const t = theme.tokens;
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  // M11: 错误状态，用于显示"加载失败 + 重试"按钮
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getNotes();
+      setNotes(data);
+    } catch (e: unknown) {
+      setNotes([]);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    (async () => {
       try {
         const data = await getNotes();
         if (cancelled) return;
         setNotes(data);
-      } catch {
-        if (!cancelled) setNotes([]);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setNotes([]);
+        setError(e instanceof Error ? e.message : String(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-    load();
+    })();
     return () => { cancelled = true; };
   }, []);
+
+  // M11: 重试时清理 error，由 load() 重新拉取
+  const onRetry = () => {
+    load();
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -47,6 +69,24 @@ export default function GoldScreen(props: Props) {
       {loading ? (
         <View style={styles.loading}>
           <ActivityIndicator size="large" color={t.brass} />
+        </View>
+      ) : error ? (
+        <View style={styles.loading}>
+          <Text style={[styles.errorText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+            加载失败：{error}
+          </Text>
+          <Pressable
+            onPress={onRetry}
+            style={({ pressed }) => [
+              styles.retryBtn,
+              { borderColor: t.brassDeep },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={[styles.retryText, { color: t.brassDeep, fontFamily: fonts.serif.bold }]}>
+              重试
+            </Text>
+          </Pressable>
         </View>
       ) : (
       <FlatList
@@ -91,4 +131,7 @@ const styles = StyleSheet.create({
   themeText: { fontFamily: fonts.sans.medium, fontSize: fontSizes.micro },
   empty: { fontFamily: fonts.kai.regular, fontSize: fontSizes.body, textAlign: 'center', marginTop: spacing.xxxl },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontFamily: fonts.kai.regular, fontSize: fontSizes.body, letterSpacing: 2, textAlign: 'center', paddingHorizontal: spacing.lg },
+  retryBtn: { marginTop: spacing.lg, paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, borderWidth: 1, borderRadius: radii.pill },
+  retryText: { fontSize: fontSizes.body, letterSpacing: 4 },
 });

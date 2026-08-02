@@ -21,7 +21,7 @@ function mapArticle(card: any): Article {
   };
 }
 
-export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<Article[]> {
+export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<{ items: Article[]; online: boolean }> {
   try {
     const res = await fetchWithTimeout(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
     if (!res.ok) throw new Error('API error');
@@ -30,9 +30,10 @@ export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<Art
     // 这里只取前端需要的字段，缺失时降级（id 退回 file_path / title；content 退回 norm）
     const articles: Article[] = (data.cards ?? []).map(mapArticle);
     setCachedArticles(articles);
-    return articles;
+    return { items: articles, online: true };
   } catch {
-    return getCachedArticles();
+    // M14: 离线降级 —— 返回缓存 + online=false，UI 可据此显示离线提示
+    return { items: getCachedArticles(), online: false };
   }
 }
 

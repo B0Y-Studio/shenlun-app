@@ -25,11 +25,13 @@ export default function JudgeScreen({ route, navigation }: Props) {
   const [raw, setRaw] = useState('');
   const [hasConfig, setHasConfig] = useState<boolean | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // M16: 屏卸载守卫，避免异步流的 setState 落到已 unmount 组件
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     (async () => {
       const cfg = await fetchLlmConfig();
-      setHasConfig(cfg.configured);
+      if (mountedRef.current) setHasConfig(cfg.configured);
     })();
   }, []);
 
@@ -37,6 +39,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
   // (e.g. user backs out). Without this the upstream connection leaks.
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
     };
   }, []);
@@ -61,12 +64,13 @@ export default function JudgeScreen({ route, navigation }: Props) {
     let collected = '';
     try {
       for await (const evt of gen) {
+        if (!mountedRef.current) break;
         if (evt.type === 'delta') {
           collected += evt.text;
-          setStreamText(collected);
+          if (mountedRef.current) setStreamText(collected);
         } else if (evt.type === 'result') {
-          setResult(evt.result);
-          setRaw(evt.raw);
+          if (mountedRef.current) setResult(evt.result);
+          if (mountedRef.current) setRaw(evt.raw);
           if (evt.result) {
             addLocalRecord({
               questionId: question.id,
@@ -79,17 +83,19 @@ export default function JudgeScreen({ route, navigation }: Props) {
             });
           }
         } else if (evt.type === 'error') {
-          Alert.alert('评卷失败', `${evt.code}: ${evt.message}`);
+          if (mountedRef.current) Alert.alert('评卷失败', `${evt.code}: ${evt.message}`);
         }
       }
     } catch (e) {
       // AbortError 是用户主动取消，静默；其它错误提示
-      if (!(e instanceof Error && e.name === 'AbortError')) {
+      if (mountedRef.current && !(e instanceof Error && e.name === 'AbortError')) {
         Alert.alert('评卷中断', e instanceof Error ? e.message : String(e));
       }
     } finally {
-      setRunning(false);
-      abortRef.current = null;
+      if (mountedRef.current) {
+        setRunning(false);
+        abortRef.current = null;
+      }
     }
   }, [question, answer, hasConfig, navigation]);
 

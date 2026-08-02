@@ -1,5 +1,5 @@
 // src/screens/ReaderScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { getArticle, postNote, markReadRemote, type Article } from '../api/client';
 import { getCachedArticles, markRead } from '../storage/mmkv';
@@ -28,8 +28,12 @@ export default function ReaderScreen(props: Props) {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  // M11: 标记成功的反馈态，按钮文字短暂变为"已标记"
+  const [marked, setMarked] = useState(false);
   // 当前 article 在今日 articles 列表中的位置 + 总数（用于底部"第 X / Y 篇"）
   const [progress, setProgress] = useState<{ index: number; total: number } | null>(null);
+  // M18: 屏卸载后仍调 setState 会触发警告，用 mountedRef 守护
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     // 守卫 route.params.id（类型上已是非空，但运行时仍可能缺失）
@@ -80,6 +84,13 @@ export default function ReaderScreen(props: Props) {
     load();
     return () => { cancelled = true; };
   }, [route.params?.id, navigation]);
+
+  // M18: 卸载时翻转 mountedRef，让异步回调内 setState 调用全部跳过
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // 过滤空字段后再拼 " | "
   const metaText = useMemo(() => {
@@ -150,24 +161,31 @@ export default function ReaderScreen(props: Props) {
             if (!article || marking) return;
             setMarking(true);
             try {
-              await postNote({
+              const ok = await postNote({
                 article_id: article.id,
                 sentence: article.highlight || article.content.slice(0, 80),
                 article_title: article.title,
                 theme: article.tags?.[0],
                 created_at: new Date().toISOString(),
               });
+              if (ok && mountedRef.current) {
+                // M11: 标记成功后短暂显示"已标记"反馈，1.5s 后复原
+                setMarked(true);
+                setTimeout(() => {
+                  if (mountedRef.current) setMarked(false);
+                }, 1500);
+              }
             } catch {
               // 静默失败：标记金句失败不影响阅读体验
             } finally {
-              setMarking(false);
+              if (mountedRef.current) setMarking(false);
             }
           }}
           accessibilityRole="button"
           accessibilityLabel="标记金句"
         >
           <Text style={[styles.markBtnText, { color: t.paper }]}>
-            {marking ? '标记中…' : '标记金句'}
+            {marking ? '标记中…' : marked ? '已标记' : '标记金句'}
           </Text>
         </Pressable>
       </View>

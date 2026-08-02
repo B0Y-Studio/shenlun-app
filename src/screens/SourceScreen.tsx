@@ -72,17 +72,16 @@ export default function SourceScreen() {
   const route = useRoute<RouteProp<MainTabParamList, 'Source'>>();
   const activeFilter = route.params?.filter ?? {};
 
-  // 记录 预填的 theme（只取一次，挂载后不应跟随 activeFilter 变化被覆盖）
-  const presetThemeRef = useRef<string | null>(
-    (activeFilter?.theme as string) ?? null
-  );
+  // M15: 用 useEffect 监听 activeFilter.theme 变化，drop 一次性 ref 快照
+  // 屏内任意时刻主题被外部变更（深链接 / 复盘 chip 跳转）都重新拉取
+  const presetTheme = (activeFilter?.theme as string | undefined) ?? null;
 
   // M5: 请求 id 计数器，用于丢弃被新请求超越的过期响应（避免快速切换 filter 时旧数据覆盖新数据）
   const reqIdRef = useRef(0);
 
   const [mode, setMode] = useState<Mode>('theme');
   // 初始 activeGroup 来自 presetTheme，让"全部"chip 之外的初始选中态正确
-  const [activeGroup, setActiveGroup] = useState<string | null>(presetThemeRef.current);
+  const [activeGroup, setActiveGroup] = useState<string | null>(presetTheme);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
@@ -115,26 +114,19 @@ export default function SourceScreen() {
     }
   }, [mode, activeGroup]);
 
-  // 首次加载：从 ReviewScreen tag chip 跳过来时按 preset theme 过滤（tap chip 路径）
-  // 没有 preset 时保持原来"全部"语义
-  // 使用 presetThemeRef 避免被后续 activeFilter 变化干扰（用 ref 一次性快照）
+  // M15: 从 ReviewScreen tag chip 跳过来时按 preset theme 过滤。
+  // 改成 useEffect 依赖 activeFilter.theme，外部导航变更 / 重入此屏时自动重拉。
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const preset = presetThemeRef.current;
-      const opts: Parameters<typeof getArticles>[0] = { pageSize: 100, with_summary: true };
-      if (preset) opts.theme = preset;
-      try {
-        const resp = await getArticles(opts);
-        setArticles(resp.items);
-        setTotal(resp.total);
-        setOnline(resp.online);
-      } catch (e: any) {
-        setErrorMsg(e?.message ?? '未知错误');
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (!presetTheme) return;
+    setActiveGroup(presetTheme);
+    fetchPage('theme', presetTheme);
+  }, [presetTheme, fetchPage]);
+
+  // 首次加载：presetTheme 为空时拉一次全量（保持"全部"语义）
+  useEffect(() => {
+    if (presetTheme) return;
+    fetchPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 切换模式时重新拉全量（不传过滤）

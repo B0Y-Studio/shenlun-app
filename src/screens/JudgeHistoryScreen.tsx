@@ -1,6 +1,6 @@
 // ShenlunApp/src/screens/JudgeHistoryScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { useNavigation } from '@react-navigation/native';
@@ -22,6 +22,8 @@ export default function JudgeHistoryScreen() {
   const nav = useNavigation<Nav>();
   const [records, setRecords] = useState<LocalJudgeRecord[]>([]);
   const [serverOnly, setServerOnly] = useState<Array<{ id: string; questionTitle: string; questionScore: number; totalScore: number; createdAt: number }>>([]);
+  // M11: 加载占位
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setRecords(listLocalRecords(50));
@@ -34,11 +36,13 @@ export default function JudgeHistoryScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
       setRecords(listLocalRecords(50));
       const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
       if (cancelled) return;
       const localIds = new Set(listLocalRecords(200).map(r => r.id));
       setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -89,16 +93,23 @@ export default function JudgeHistoryScreen() {
         <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]}>评卷历史</Text>
         <View style={{ width: 60 }} />
       </View>
-      <FlatList<HistoryRow>
-        data={[
-          ...records.map(r => ({ ...r, _isLocal: true } as HistoryRow)),
-          ...serverOnly.map(s => ({ ...s, _isLocal: false } as HistoryRow)),
-        ]}
-        keyExtractor={(item: HistoryRow) => item.id + (item._isLocal ? '_L' : '_S')}
-        contentContainerStyle={{ padding: spacing.lg }}
-        ListEmptyComponent={<Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>暂无评卷记录</Text>}
-        renderItem={({ item }: { item: HistoryRow }) => renderItem({ item, isLocal: item._isLocal })}
-      />
+      {loading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={t.brass} />
+          <Text style={[styles.loadingText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>加载中…</Text>
+        </View>
+      ) : (
+        <FlatList<HistoryRow>
+          data={[
+            ...records.map(r => ({ ...r, _isLocal: true } as HistoryRow)),
+            ...serverOnly.map(s => ({ ...s, _isLocal: false } as HistoryRow)),
+          ]}
+          keyExtractor={(item: HistoryRow) => item.id + (item._isLocal ? '_L' : '_S')}
+          contentContainerStyle={{ padding: spacing.lg }}
+          ListEmptyComponent={<Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>暂无评卷记录</Text>}
+          renderItem={({ item }: { item: HistoryRow }) => renderItem({ item, isLocal: item._isLocal })}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -118,4 +129,6 @@ const styles = StyleSheet.create({
   score: { fontSize: fontSizes.body },
   meta: { fontSize: fontSizes.micro, marginTop: spacing.xs },
   empty: { textAlign: 'center', marginTop: spacing.xxxl, fontSize: fontSizes.body, letterSpacing: 4 },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  loadingText: { marginTop: spacing.sm, fontSize: fontSizes.body, letterSpacing: 4 },
 });

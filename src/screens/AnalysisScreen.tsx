@@ -3,7 +3,7 @@
 // 数据源：本地 MMKV（getCachedArticles / getReadIds / getReadHistory / getLocalNotes）
 //   服务端没有题型字段，"薄弱题型" 用 "已读较少的主题" 替代
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -30,6 +30,8 @@ export default function AnalysisScreen() {
   // 服务端统计（在线时用）/ 本地兜底（离线）
   const [analytics, setAnalytics] = useState<Awaited<ReturnType<typeof getAnalyticsSummary>> | null>(null);
   const [online, setOnline] = useState(false);
+  // M11: 加载状态，用于显示 loading 占位符
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +40,7 @@ export default function AnalysisScreen() {
       if (cancelled) return;
       setAnalytics(a);
       setOnline(a.online);
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -118,20 +121,31 @@ export default function AnalysisScreen() {
           <Text style={[styles.cardHead, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
             概     览
           </Text>
-          <View style={styles.statsRow}>
-            <Stat label="本月已读" value={String(stats.monthReads)} unit="篇" color={t.seal} />
-            <Stat label="累计已读" value={String(stats.totalReads)} unit="篇" color={t.ink} />
-            <Stat label="标金"      value={String(stats.notes)}        unit="句" color={t.brassDeep} />
-          </View>
-          <View style={styles.statsRow}>
-            <Stat label="素材库" value={String(stats.articles)} unit="篇" color={t.jade} />
-            <Pressable onPress={onJumpToPaper} style={styles.statLinkBtn}>
-              <Text style={[styles.statLink, { color: t.brassDeep, fontFamily: fonts.serif.bold }]}>
-                做真题 →
+          {loading ? (
+            <View style={styles.statsLoading}>
+              <ActivityIndicator size="small" color={t.brass} />
+              <Text style={[styles.statsLoadingText, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+                统计加载中…
               </Text>
-            </Pressable>
-            <View style={{ width: 90 }} />
-          </View>
+            </View>
+          ) : (
+            <>
+              <View style={styles.statsRow}>
+                <Stat label="本月已读" value={String(stats.monthReads)} unit="篇" color={t.seal} />
+                <Stat label="累计已读" value={String(stats.totalReads)} unit="篇" color={t.ink} />
+                <Stat label="标金"      value={String(stats.notes)}        unit="句" color={t.brassDeep} />
+              </View>
+              <View style={styles.statsRow}>
+                <Stat label="素材库" value={String(stats.articles)} unit="篇" color={t.jade} />
+                <Pressable onPress={onJumpToPaper} style={styles.statLinkBtn}>
+                  <Text style={[styles.statLink, { color: t.brassDeep, fontFamily: fonts.serif.bold }]}>
+                    做真题 →
+                  </Text>
+                </Pressable>
+                <View style={{ width: 90 }} />
+              </View>
+            </>
+          )}
         </View>
 
         {/* 高频主题 */}
@@ -261,6 +275,8 @@ const styles = StyleSheet.create({
   },
   empty: { textAlign: 'center', fontSize: fontSizes.body, letterSpacing: 2, paddingVertical: spacing.md },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
+  statsLoading: { paddingVertical: spacing.lg, alignItems: 'center' },
+  statsLoadingText: { marginTop: spacing.xs, fontSize: fontSizes.caption, letterSpacing: 4 },
   stat: { width: 90, alignItems: 'center' },
   statValue: { fontSize: fontSizes.title, lineHeight: fontSizes.title * 1.1, marginBottom: 2 },
   statUnit: { fontSize: fontSizes.caption },
