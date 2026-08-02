@@ -64,5 +64,7 @@ __pycache__/
 *.zip
 !ShenlunApp_V3_AndroidStudio-source.zip
 
-# Release keystore (Plan D will generate)
-*.keystore
+# Release keystore (Plan D will generate) — 只忽略 release，debug 例外仍生效
+android/app/release.keystore
+android/app/*.keystore
+!android/app/debug.keystore

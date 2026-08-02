@@ -5,7 +5,12 @@ pluginManagement {
     gradlePluginPortal()
   }
 }
-plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }
+// foojay-resolver-convention REMOVED: it tries to HEAD github.com to discover
+// latest JDK 17, which times out on networks with restricted egress. We rely
+// on the org.gradle.java.home in gradle.properties to point at the local
+// Temurin-17 install at C:\Users\hecto\jdk17\jdk-17.0.19+10.
+// (Re-add the foojay plugin when network egress to github.com is available.)
+// plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }
 
 rootProject.name = 'ShenlunApp'
 apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
