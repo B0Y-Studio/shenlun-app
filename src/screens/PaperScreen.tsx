@@ -1,6 +1,6 @@
 // src/screens/PaperScreen.tsx
 // 题目 Tab: 真题库列表 + 详情（题干 / 答案 切换）
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable,
   ActivityIndicator, FlatList, TextInput, RefreshControl,
@@ -43,6 +43,15 @@ export default function PaperScreen() {
   const [showQuestions, setShowQuestions] = useState(false);
   const [activeQ, setActiveQ] = useState<Question | null>(null);
 
+  // M3: mountedRef guard. Each async load flips it false on unmount so
+  // setState after the await never runs against an unmounted tree.
+  // (Fixes the q/a switch crash: switching then immediately backing out
+  // could call setDetail/setDetailLoading against an unmounted screen.)
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Fetch list
   const loadPapers = useCallback(async () => {
     setLoading(true);
@@ -53,13 +62,17 @@ export default function PaperScreen() {
         province: level === 'shengkao' && debouncedProvince ? debouncedProvince : undefined,
         pageSize: 50,
       });
-      setPapers(resp.items);
-      setTotal(resp.total);
+      if (mountedRef.current) {
+        setPapers(resp.items);
+        setTotal(resp.total);
+      }
     } catch {
-      setPapers([]);
-      setTotal(0);
+      if (mountedRef.current) {
+        setPapers([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [level, debouncedYear, debouncedProvince]);
 
@@ -73,12 +86,13 @@ export default function PaperScreen() {
     setShowQuestions(false);
     try {
       const d = await getPaper(id);
+      if (!mountedRef.current) return;
       setDetail(d);
       setQaTab(d?.qa ?? 'q');
     } catch {
-      setDetail(null);
+      if (mountedRef.current) setDetail(null);
     } finally {
-      setDetailLoading(false);
+      if (mountedRef.current) setDetailLoading(false);
     }
   }, []);
 
@@ -94,9 +108,36 @@ export default function PaperScreen() {
   const loadQuestions = useCallback(async () => {
     if (!detail) return;
     const resp = await getQuestions(detail.id);
+    if (!mountedRef.current) return;
     setQuestions(resp.items);
     setShowQuestions(true);
   }, [detail]);
+
+  // L7: renderItem 抽 useCallback —— PaperScreen 自身加载时 setPapers
+  // 会触发整屏渲染，没有 useCallback 会重建所有 Pressable + 内联 style。
+  const renderPaper = useCallback(({ item }: { item: Paper }) => (
+    <Pressable
+      onPress={() => openPaper(item.id)}
+      style={({ pressed }) => [
+        styles.paperCard,
+        { backgroundColor: t.paper, borderColor: t.border },
+        pressed && { opacity: 0.85 },
+      ]}
+      android_ripple={{ color: `${t.brass}22` }}
+    >
+      <View style={styles.paperHead}>
+        <Text style={[styles.paperTitle, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={[styles.paperQa, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+          {item.qa === 'q' ? '试 题' : '答 案'}
+        </Text>
+      </View>
+      <Text style={[styles.paperMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+        {item.province}  ·  {item.volume || '通用'}{item.joint ? '  ·  联考' : ''}
+      </Text>
+    </Pressable>
+  ), [openPaper, t.paper, t.border, t.ink, t.inkMuted, t.inkFaint, t.brass]);
 
   // Detail view: single question focused
   if (detail && activeQ) {
@@ -211,9 +252,13 @@ export default function PaperScreen() {
                   : detail.id.replace(/-a-/, '-q-');
                 setQaTab(k);
                 setDetailLoading(true);
-                const d = await getPaper(other);
-                setDetail(d ?? detail);
-                setDetailLoading(false);
+                try {
+                  const d = await getPaper(other);
+                  if (!mountedRef.current) return;
+                  setDetail(d ?? detail);
+                } finally {
+                  if (mountedRef.current) setDetailLoading(false);
+                }
               }}
               style={[
                 styles.qSwitchTab,
@@ -303,29 +348,7 @@ export default function PaperScreen() {
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={loadPapers} colors={[t.seal]} />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => openPaper(item.id)}
-              style={({ pressed }) => [
-                styles.paperCard,
-                { backgroundColor: t.paper, borderColor: t.border },
-                pressed && { opacity: 0.85 },
-              ]}
-              android_ripple={{ color: `${t.brass}22` }}
-            >
-              <View style={styles.paperHead}>
-                <Text style={[styles.paperTitle, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.paperQa, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-                  {item.qa === 'q' ? '试 题' : '答 案'}
-                </Text>
-              </View>
-              <Text style={[styles.paperMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
-                {item.province}  ·  {item.volume || '通用'}{item.joint ? '  ·  联考' : ''}
-              </Text>
-            </Pressable>
-          )}
+          renderItem={renderPaper}
           ListEmptyComponent={
             <Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
               暂无匹配真题

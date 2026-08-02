@@ -1,6 +1,6 @@
 // src/App.tsx
 // V3 定稿壳：5 个 Tab + Stack 推入 Reader/Review/Gold
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -44,17 +44,29 @@ type MainTabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
 
+// M1 + L4 + L5: hoist `MainTabs` to module scope and memoize its
+// `tabBar` render-prop with useCallback (depends only on the route name
+// capitalize helper, which is itself referentially stable inside the
+// closure). Previously the function was redefined on every RootNavigator
+// render, which forced React Navigation to remount every screen's tab
+// config on theme changes.
+const capitalizeFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 function MainTabs() {
-  const { theme } = useTheme();
+  const renderTabBar = useCallback(
+    ({ navigation, state }: { navigation: any; state: any }) => (
+      <TabBar
+        activeKey={state.routes[state.index].name.toLowerCase()}
+        onChange={(k) => navigation.navigate(capitalizeFirst(k) as never)}
+      />
+    ),
+    [],
+  );
+
   return (
     <MainTab.Navigator
       screenOptions={{ headerShown: false }}
-      tabBar={({ navigation, state }) => (
-        <TabBar
-          activeKey={state.routes[state.index].name.toLowerCase()}
-          onChange={(k) => navigation.navigate(k.charAt(0).toUpperCase() + k.slice(1) as never)}
-        />
-      )}
+      tabBar={renderTabBar}
     >
       <MainTab.Screen name="Home" component={HomeScreen} />
       <MainTab.Screen name="Source" component={SourceScreen} />

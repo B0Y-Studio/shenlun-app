@@ -83,7 +83,13 @@ export default function LlmConfigScreen() {
   }, []);
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={t.brass} /></View>;
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+        <View style={styles.center}>
+          <ActivityIndicator color={t.brass} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (

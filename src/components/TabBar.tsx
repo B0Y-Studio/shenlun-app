@@ -1,6 +1,11 @@
 // src/components/TabBar.tsx
 // V3 底部 TabBar —— 毛笔字 + 下方细线（active 加粗红）
-import React from 'react';
+//
+// M1: React.memo + render-prop child component `TabItem` wrapped with
+// React.memo. The parent (MainTabs) re-renders on every navigation state
+// change; without this, every TabBar Pressable gets a brand-new onPress
+// closure each render and re-renders unnecessarily.
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
@@ -10,6 +15,51 @@ interface Props {
   activeKey: string;
   onChange: (key: string) => void;
 }
+
+interface TabItemProps {
+  tabKey: string;
+  label: string;
+  active: boolean;
+  onPress: (key: string) => void;
+}
+
+const TabItem = React.memo<TabItemProps>(({ tabKey, label, active, onPress }) => {
+  const { theme } = useTheme();
+  const t = theme.tokens;
+  const handlePress = useCallback(() => onPress(tabKey), [onPress, tabKey]);
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.tab,
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <View style={[styles.lblWrap, active && styles.lblWrapActive]}>
+        <Text
+          style={[
+            styles.lbl,
+            {
+              color: active ? t.seal : t.inkSoft,
+              textShadowColor: active ? t.sealDeep : 'transparent',
+              textShadowRadius: active ? 1 : 0,
+              textShadowOffset: active ? { width: 0, height: 1 } : { width: 0, height: 0 },
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <View
+          style={[
+            styles.underline,
+            { backgroundColor: active ? t.seal : t.divider, height: active ? 3 : 1.5 },
+          ]}
+        />
+      </View>
+    </Pressable>
+  );
+});
 
 export const TabBar: React.FC<Props> = ({ activeKey, onChange }) => {
   const { theme } = useTheme();
@@ -26,42 +76,15 @@ export const TabBar: React.FC<Props> = ({ activeKey, onChange }) => {
         },
       ]}
     >
-        {TAB_ITEMS.map(tab => {
-          const active = tab.key === activeKey;
-          return (
-            <Pressable
-              key={tab.key}
-              onPress={() => onChange(tab.key)}
-              style={({ pressed }) => [
-                styles.tab,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <View style={[styles.lblWrap, active && styles.lblWrapActive]}>
-                <Text
-                  style={[
-                    styles.lbl,
-                    {
-                      color: active ? t.seal : t.inkSoft,
-                      textShadowColor: active ? t.sealDeep : 'transparent',
-                      textShadowRadius: active ? 1 : 0,
-                      textShadowOffset: active ? { width: 0, height: 1 } : { width: 0, height: 0 },
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-                <View
-                  style={[
-                    styles.underline,
-                    { backgroundColor: active ? t.seal : t.divider, height: active ? 3 : 1.5 },
-                  ]}
-                />
-              </View>
-            </Pressable>
-          );
-        })}
+        {TAB_ITEMS.map(tab => (
+          <TabItem
+            key={tab.key}
+            tabKey={tab.key}
+            label={tab.label}
+            active={tab.key === activeKey}
+            onPress={onChange}
+          />
+        ))}
       </View>
   );
 };

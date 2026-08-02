@@ -1,6 +1,6 @@
 // src/components/QuoteCard.tsx
 // V3 首页"锦言"卡 + 换一句按钮
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii, QUOTES } from '../theme/tokens';
@@ -9,8 +9,10 @@ export const QuoteCard: React.FC = () => {
   const { theme } = useTheme();
   const t = theme.tokens;
   // 顺序展示，换一句推进
+  // L3: useMemo was wrapping a single array index — pure overhead.
+  // Just compute inline; the work is one modulo + one array lookup.
   const [idx, setIdx] = useState(0);
-  const quote = useMemo(() => QUOTES[idx % QUOTES.length], [idx]);
+  const quote = QUOTES[idx % QUOTES.length];
 
   return (
     <View style={[styles.card, { backgroundColor: t.paper, borderColor: t.border, shadowColor: t.ink }]}>

@@ -15,7 +15,11 @@ interface Props {
   onPress?: () => void;
 }
 
-export const ArticleCard: React.FC<Props> = ({
+// M1: React.memo so parent re-renders (theme mode change, scroll state,
+// etc.) don't rebuild every visible card in the FlatList. ArticleCard
+// only re-renders when one of its props actually changes (chapter, title,
+// content, highlight, index, total, isRead, onPress).
+export const ArticleCard = React.memo<Props>(({
   chapter, title, content, highlight,
   index, total, isRead = false, onPress,
 }) => {
@@ -74,7 +78,7 @@ export const ArticleCard: React.FC<Props> = ({
       <Text style={[styles.footer, { color: t.inkMuted }]}>⸺ 第 {index} / {total} 篇 ⸺</Text>
     </Pressable>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {

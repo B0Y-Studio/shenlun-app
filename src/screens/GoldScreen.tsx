@@ -1,5 +1,5 @@
 // src/screens/GoldScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { getNotes, type Note } from '../api/client';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,23 +18,14 @@ export default function GoldScreen(props: Props) {
   // M11: 错误状态，用于显示"加载失败 + 重试"按钮
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getNotes();
-      setNotes(data);
-    } catch (e: unknown) {
-      setNotes([]);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
+  // L2: 把 load 抽成 useCallback，挂载 effect 和 retry 都共用这一份逻辑
+  // （之前同一份 fetch 代码写了两遍，retry 调用的版本缺 cancelled 守卫，
+  // 重试时组件若已 unmount 会触发 setState on unmounted warning）。
+  const load = useCallback(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
+      setError(null);
       try {
         const data = await getNotes();
         if (cancelled) return;
@@ -50,10 +41,12 @@ export default function GoldScreen(props: Props) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => load(), [load]);
+
   // M11: 重试时清理 error，由 load() 重新拉取
-  const onRetry = () => {
+  const onRetry = useCallback(() => {
     load();
-  };
+  }, [load]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>

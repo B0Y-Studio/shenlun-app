@@ -5,7 +5,7 @@
 // - 主体: 已读文章分组列表，每条卡片带日期 + 标题 + 来源/作者 + tag chip
 // - 主体底部: 案牍劳形 不废研读
 // - tag chip 点击 → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } })
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, SectionList, ActivityIndicator } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -67,11 +67,20 @@ export default function ReviewScreen(props: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  // M12: 挂载时加载 + 进入屏焦点（从 Reader 返回）时同步刷新
+  // M5: focus 时比较"已读 id 串"是否变化，变了才重新拉数据。
+  // 之前每次 focus 都无条件 reload —— MMKV getString + JSON.parse + 潜在
+  // getArticlesByIds 一次完整链路，即使屏从未实际改变也跑一遍。
+  // 挂载时立即用当前 id 串初始化 lastIdsRef，这样后续 focus 比较就有基线。
+  const lastIdsRef = useRef<string>(getReadIds().join(','));
   useEffect(() => {
     loadReviewData();
     const unsub = navigation.addListener('focus', () => {
-      loadReviewData();
+      const ids = getReadIds();
+      const key = ids.join(',');
+      if (key !== lastIdsRef.current) {
+        lastIdsRef.current = key;
+        loadReviewData();
+      }
     });
     return unsub;
   }, [loadReviewData, navigation]);
