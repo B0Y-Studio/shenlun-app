@@ -7,7 +7,7 @@ import { fetchWithTimeout } from './fetchWithTimeout';
 
 function deviceId(): string { return getDeviceId(); }
 
-function mapArticle(card: any): Article {
+export function mapArticle(card: any): Article {
   return {
     id: card.id ?? card.file_path ?? card.title,
     chapter: card.tags?.[0] ?? '',
