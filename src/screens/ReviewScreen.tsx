@@ -7,7 +7,6 @@
 // - tag chip 点击 → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } })
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, SectionList, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';

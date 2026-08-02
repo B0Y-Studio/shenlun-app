@@ -71,10 +71,15 @@ export default function PaperScreen() {
     setDetail(null);
     setActiveQ(null);
     setShowQuestions(false);
-    const d = await getPaper(id);
-    setDetail(d);
-    setQaTab(d?.qa ?? 'q');
-    setDetailLoading(false);
+    try {
+      const d = await getPaper(id);
+      setDetail(d);
+      setQaTab(d?.qa ?? 'q');
+    } catch {
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
   }, []);
 
   // Back from detail

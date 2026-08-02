@@ -153,7 +153,7 @@ export default function HomeScreen() {
                 width: g.size,
                 height: g.size,
                 borderRadius: 9999,
-                backgroundColor: theme.mode === 'dark' ? `rgba(192,72,81,${g.opacity})` : `rgba(192,72,81,${g.opacity})`,
+                backgroundColor: `rgba(192,72,81,${g.opacity})`,
               },
             ]}
           />
@@ -220,16 +220,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  topGlow: {
-    position: 'absolute',
-    top: 0,
-    left: '20%',
-    width: '60%',
-    height: 280,
-    borderRadius: 280,
-    opacity: 1,
-    // 边缘自然淡出：用大半径 + 透明度弱化
-  },
   glowWrap: {
     position: 'absolute',
     top: 0, left: 0, right: 0,

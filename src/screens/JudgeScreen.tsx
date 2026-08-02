@@ -119,7 +119,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
         {question ? (
           <View style={[styles.qCard, { backgroundColor: t.paper, borderColor: t.border }]}>
             <Text style={[styles.qTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}>
-              第{question.question_no}题  ·  {question.score} 分
+              第{question.question_no}题  ·  {question.score ?? 0} 分
             </Text>
             <Text style={[styles.qBody, { color: t.inkSoft, fontFamily: fonts.kai.regular }]} numberOfLines={6}>
               {question.body}

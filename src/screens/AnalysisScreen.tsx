@@ -29,7 +29,6 @@ export default function AnalysisScreen() {
 
   // 服务端统计（在线时用）/ 本地兜底（离线）
   const [analytics, setAnalytics] = useState<Awaited<ReturnType<typeof getAnalyticsSummary>> | null>(null);
-  const [online, setOnline] = useState(false);
   // M11: 加载状态，用于显示 loading 占位符
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +38,6 @@ export default function AnalysisScreen() {
       const a = await getAnalyticsSummary();
       if (cancelled) return;
       setAnalytics(a);
-      setOnline(a.online);
       setLoading(false);
     })();
     return () => { cancelled = true; };
