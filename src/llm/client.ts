@@ -88,7 +88,7 @@ export async function* runJudge(
         user_answer: userAnswer,
       }),
       signal: opts.signal,
-    });
+    }, 120_000);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     yield { type: 'error', code: 'network', message };
