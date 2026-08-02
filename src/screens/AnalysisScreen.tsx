@@ -10,7 +10,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import {
   getCachedArticles, getReadHistory, countReadsInWindow,
-  getLocalNotes, type Article,
+  getLocalNotes, type Article, type Note, type ReadHistoryItem,
 } from '../storage/mmkv';
 import { getAnalyticsSummary } from '../api/client';
 import type { RootStackParamList } from '../App';
@@ -32,6 +32,14 @@ export default function AnalysisScreen() {
   // M11: 加载状态，用于显示 loading 占位符
   const [loading, setLoading] = useState(true);
 
+  // H3: 本地数据 mount 时一次性读取，存 state。原先写在 stats useMemo 里
+  // 每次重算都会 MMKV getString + JSON.parse 一次（缓存大时切 Tab 卡顿）。
+  const [localData, setLocalData] = useState<{
+    articles: Article[];
+    notes: Note[];
+    readHistory: ReadHistoryItem[];
+  }>({ articles: [], notes: [], readHistory: [] });
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -40,15 +48,20 @@ export default function AnalysisScreen() {
       setAnalytics(a);
       setLoading(false);
     })();
+    // H3: 一次性 snapshot 本地数据；卸载保护（与上一段 cancelled 合并）
+    setLocalData({
+      articles: getCachedArticles(),
+      notes: getLocalNotes(),
+      readHistory: getReadHistory(),
+    });
     return () => { cancelled = true; };
   }, []);
 
   const stats = useMemo(() => {
-    const articles = getCachedArticles();
-    const notes = getLocalNotes();
+    const { articles, notes, readHistory } = localData;
     // 服务端聚合优先；否则用本地兜底
     const monthReads = analytics?.month_reads ?? countReadsInWindow(30 * 24 * 60 * 60 * 1000);
-    const totalReads = analytics?.total_reads ?? getReadHistory().length;
+    const totalReads = analytics?.total_reads ?? readHistory.length;
     // 主题聚合：服务端 themes 数组（如有），否则本地按 tags 聚合
     const themes: Array<{ key: string; count: number }> = (analytics?.themes && analytics.themes.length > 0)
       ? analytics.themes
@@ -72,7 +85,7 @@ export default function AnalysisScreen() {
       sources: analytics?.sources ?? [],
       dates: analytics?.dates ?? [],
     };
-  }, [analytics]);
+  }, [analytics, localData]);
 
   // 高频主题 Top 5
   const topThemes = stats.themes.slice(0, 5);

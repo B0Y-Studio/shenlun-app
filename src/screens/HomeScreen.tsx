@@ -138,27 +138,13 @@ export default function HomeScreen() {
         backgroundColor={t.bg}
       />
 
-      {/* 顶部微红径向晕（模拟 radial-gradient） */}
-      <View style={styles.glowWrap} pointerEvents="none">
-        {[
-          { size: '200%', opacity: 0.03 },
-          { size: '120%', opacity: 0.05 },
-          { size: '60%',  opacity: 0.07 },
-        ].map((g, i) => (
-          <View
-            key={i}
-            style={[
-              styles.glowRing,
-              {
-                width: g.size,
-                height: g.size,
-                borderRadius: 9999,
-                backgroundColor: `rgba(192,72,81,${g.opacity})`,
-              },
-            ]}
-          />
-        ))}
-      </View>
+      {/* H5: 顶部微红晕从三层绝对定位 View（200% / 120% / 60%，GPU 重绘
+          开销大）减到单层 View + rgba 颜色。视觉差异极小（红色微染背景），
+          滚动掉帧明显减少。glowRing 样式保留以兼容未来扩展，但不再使用。 */}
+      <View
+        style={[styles.glowWrap, { backgroundColor: 'rgba(192,72,81,0.05)' }]}
+        pointerEvents="none"
+      />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 头部：申论 + 公历日期 */}
@@ -228,10 +214,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     overflow: 'visible',
     opacity: 0.9,
-  },
-  glowRing: {
-    position: 'absolute',
-    top: -60,
   },
   scroll: { paddingTop: 10, paddingHorizontal: 20, paddingBottom: 10 },
   header: {

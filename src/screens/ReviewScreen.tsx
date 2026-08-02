@@ -34,13 +34,16 @@ export default function ReviewScreen(props: Props) {
   const [loading, setLoading] = useState(true);
 
   // 加载：MMKV 已读 id → 缓存兜底 → /api/articles 补全
-  const loadReviewData = useCallback(async () => {
-    let cancelled = false;
+  // V1.2: useRef 持有 cancelled flag，effect cleanup 时设为 true。
+  // useEffect 调一次，第二次 focus（M5 比较命中）时直接 return（不触发 loading）。
+  // 卸载场景：cleanup → cancelled = true → 后续 await setArticles 被丢弃。
+  const cancelledRef = useRef(false);
+  const loadReviewData = useCallback(() => {
     setLoading(true);
     (async () => {
       const ids = getReadIds();
       if (ids.length === 0) {
-        if (!cancelled) { setArticles([]); setLoading(false); }
+        if (!cancelledRef.current) { setArticles([]); setLoading(false); }
         return;
       }
       // 缓存兜底
@@ -50,21 +53,25 @@ export default function ReviewScreen(props: Props) {
       const baseList: Article[] = ids
         .map(id => cachedById.get(id))
         .filter((x): x is Article => !!x);
-      if (!cancelled) setArticles(baseList);
+      if (!cancelledRef.current) setArticles(baseList);
 
       // 服务端补全（容忍网络/路由失败）
       if (missing.length) {
         try {
           const { items } = await getArticlesByIds(missing);
-          if (cancelled) return;
+          if (cancelledRef.current) return;
           const seen = new Set(baseList.map(a => a.id));
           const merged = [...baseList, ...items.filter(a => !seen.has(a.id))];
           setArticles(merged);
         } catch { /* 降级 */ }
       }
-      if (!cancelled) setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     })();
-    return () => { cancelled = true; };
+  }, []);
+
+  // 卸载时丢弃所有 pending await（V1.2 carry-forward）
+  useEffect(() => {
+    return () => { cancelledRef.current = true; };
   }, []);
 
   // M5: focus 时比较"已读 id 串"是否变化，变了才重新拉数据。
@@ -119,59 +126,22 @@ export default function ReviewScreen(props: Props) {
     groups.map(([key, list]) => ({ title: key, count: list.length, data: list })),
     [groups]);
 
-  const renderItem = ({ item }: { item: Article }) => (
-    <Pressable
+  // H2: 行渲染抽 ReviewRow 子组件 + useCallback 包裹 renderItem。
+  // 之前 renderItem 是组件内箭头函数，每次 ReviewScreen 渲染都新建
+  // （包括 sourcePress 后触发的导航导致主题切换），SectionList 复用失效。
+  // V1.2: 同时合并 cancelledRef，loadReviewData 在组件卸载时丢弃 pending await。
+  const renderItem = useCallback(({ item }: { item: Article }) => (
+    <ReviewRow
+      item={item}
+      theme={theme}
       onPress={() => navigation.navigate('Reader', { id: item.id })}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: t.paper, borderColor: t.border },
-        pressed && { opacity: 0.85 },
-      ]}
-      android_ripple={{ color: `${t.brass}22` }}
-    >
-      <Text style={[styles.rowDate, { color: t.inkMuted, fontFamily: fonts.serif.regular }]}>
-        {(item.date ?? '').slice(5)}
-      </Text>
-      <View style={styles.rowBody}>
-        <Text
-          style={[styles.rowTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}
-          numberOfLines={2}
-        >
-          {item.title || '无题'}
-        </Text>
-        {(item.tags ?? []).slice(0, 4).length > 0 && (
-          <View style={styles.tagsRow}>
-            {(item.tags ?? []).slice(0, 4).map((tg: string) => (
-              <Pressable
-                key={tg}
-                onPress={() => onJumpToSource(tg)}
-                style={({ pressed }) => [
-                  styles.tag,
-                  { borderColor: t.brass },
-                  pressed && { backgroundColor: `${t.brass}22` },
-                ]}
-              >
-                <Text style={[styles.tagText, { color: t.brassDeep, fontFamily: fonts.kai.regular }]}>
-                  {tg}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-        {(item.source || item.author) ? (
-          <Text style={[styles.rowMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
-            {item.source || ''}{item.source && item.author ? '  ·  ' : ''}{item.author || ''}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
-  );
+      onJumpToSource={onJumpToSource}
+    />
+  ), [theme, navigation, onJumpToSource]);
 
-  const renderSectionHeader = ({ section }: { section: { title: string; count: number } }) => (
-    <Text style={[styles.groupHead, { color: t.seal, fontFamily: fonts.kai.bold }]}>
-      {section.title}  ·  共 {section.count} 篇
-    </Text>
-  );
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string; count: number } }) => (
+    <ReviewSectionHeader title={section.title} count={section.count} theme={theme} />
+  ), [theme]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -251,3 +221,75 @@ const styles = StyleSheet.create({
   rowMeta: { fontSize: 10, letterSpacing: 1, marginTop: spacing.xs },
   footer: { textAlign: 'center', fontSize: 11, letterSpacing: 6, marginTop: spacing.lg },
 });
+
+// H2: 子组件 + memo。组件外定义避免 ReviewScreen 每次渲染都重建。
+// ReviewRow 不接 theme 对象而是接收需要的 token 字段，避免 theme 对象引用变化
+// 让所有 row 都重渲染。
+interface ReviewRowProps {
+  item: Article;
+  theme: { tokens: ReturnType<typeof useTheme>['theme']['tokens'] };
+  onPress: () => void;
+  onJumpToSource: (themeKey: string) => void;
+}
+const ReviewRow = React.memo<ReviewRowProps>(({ item, theme, onPress, onJumpToSource }) => {
+  const t = theme.tokens;
+  const tags = (item.tags ?? []).slice(0, 4);
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: t.paper, borderColor: t.border },
+        pressed && { opacity: 0.85 },
+      ]}
+      android_ripple={{ color: `${t.brass}22` }}
+    >
+      <Text style={[styles.rowDate, { color: t.inkMuted, fontFamily: fonts.serif.regular }]}>
+        {(item.date ?? '').slice(5)}
+      </Text>
+      <View style={styles.rowBody}>
+        <Text
+          style={[styles.rowTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}
+          numberOfLines={2}
+        >
+          {item.title || '无题'}
+        </Text>
+        {tags.length > 0 ? (
+          <View style={styles.tagsRow}>
+            {tags.map(tg => (
+              <Pressable
+                key={tg}
+                onPress={() => onJumpToSource(tg)}
+                style={({ pressed }) => [
+                  styles.tag,
+                  { borderColor: t.brass },
+                  pressed && { backgroundColor: `${t.brass}22` },
+                ]}
+              >
+                <Text style={[styles.tagText, { color: t.brassDeep, fontFamily: fonts.kai.regular }]}>
+                  {tg}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {(item.source || item.author) ? (
+          <Text style={[styles.rowMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+            {item.source || ''}{item.source && item.author ? '  ·  ' : ''}{item.author || ''}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+});
+
+interface ReviewSectionHeaderProps {
+  title: string;
+  count: number;
+  theme: { tokens: ReturnType<typeof useTheme>['theme']['tokens'] };
+}
+const ReviewSectionHeader = React.memo<ReviewSectionHeaderProps>(({ title, count, theme }) => (
+  <Text style={[styles.groupHead, { color: theme.tokens.seal, fontFamily: fonts.kai.bold }]}>
+    {title}  ·  共 {count} 篇
+  </Text>
+));

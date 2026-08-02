@@ -1,5 +1,11 @@
 // ShenlunApp/src/screens/JudgeHistoryScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+//
+// H4: 三处性能修复
+// 1. `rows` 改为 useMemo 包裹（每次渲染不再新建数组对象）
+// 2. `renderItem` 抽 HistoryRow 子组件 + useCallback 包裹
+// 3. `load` 只读一次 local 记录（之前 `listLocalRecords(50)` + `listLocalRecords(200)`
+//    各跑一次，MMKV 二次 JSON.parse；现在统一读 200 条 + 切片）
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
@@ -16,58 +22,23 @@ type HistoryRow =
   | (LocalJudgeRecord & { _isLocal: true })
   | (RemoteJudgeItem & { _isLocal: false });
 
-export default function JudgeHistoryScreen() {
-  const { theme } = useTheme();
+function fmtTime(ms: number) {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+interface HistoryRowProps {
+  item: HistoryRow;
+  theme: { tokens: ReturnType<typeof useTheme>['theme']['tokens'] };
+  onLongPress: (id: string, isLocal: boolean) => void;
+}
+// H4: HistoryRow 子组件 + memo。同 listLocalRecords / setRecords 触发
+// 重建时，FlatList 复用生效，每个卡片只在 props 真变化时重渲染。
+const HistoryRowView = React.memo<HistoryRowProps>(({ item, theme, onLongPress }) => {
   const t = theme.tokens;
-  const nav = useNavigation<Nav>();
-  const [records, setRecords] = useState<LocalJudgeRecord[]>([]);
-  const [serverOnly, setServerOnly] = useState<Array<{ id: string; questionTitle: string; questionScore: number; totalScore: number; createdAt: number }>>([]);
-  // M11: 加载占位
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setRecords(listLocalRecords(50));
-    const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
-    const localIds = new Set(listLocalRecords(200).map(r => r.id));
-    setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
-  }, []);
-
-  // M5: 屏卸载时取消异步加载，防止卸载后 setState 报警告
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setRecords(listLocalRecords(50));
-      const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
-      if (cancelled) return;
-      const localIds = new Set(listLocalRecords(200).map(r => r.id));
-      setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const onDelete = useCallback((id: string, isLocal: boolean) => {
-    Alert.alert('删除记录', '确定删除？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除', style: 'destructive', onPress: async () => {
-          if (isLocal) deleteLocalRecord(id);
-          await deleteJudgeHistoryServer(id);
-          load();
-        },
-      },
-    ]);
-  }, [load]);
-
-  const fmtTime = (ms: number) => {
-    const d = new Date(ms);
-    return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-
-  const renderItem = ({ item, isLocal }: { item: HistoryRow; isLocal: boolean }) => (
+  return (
     <Pressable
-      onLongPress={() => onDelete(item.id, isLocal)}
+      onLongPress={() => onLongPress(item.id, item._isLocal)}
       style={[styles.card, { backgroundColor: t.paper, borderColor: t.border }]}
     >
       <View style={styles.cardHead}>
@@ -83,6 +54,66 @@ export default function JudgeHistoryScreen() {
       </Text>
     </Pressable>
   );
+});
+
+export default function JudgeHistoryScreen() {
+  const { theme } = useTheme();
+  const t = theme.tokens;
+  const nav = useNavigation<Nav>();
+  const [records, setRecords] = useState<LocalJudgeRecord[]>([]);
+  const [serverOnly, setServerOnly] = useState<RemoteJudgeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // H4: load 只读一次 local：listLocalRecords(200) 一次（MMKV getString +
+  // JSON.parse 一次），取前 50 显示，剩下 50-200 用作"已存在 id 集合"
+  // 用来过滤服务端返回重复项。
+  const load = useCallback(async () => {
+    setLoading(true);
+    const localAll = listLocalRecords(200);
+    setRecords(localAll.slice(0, 50));
+    const serverItems = await fetchJudgeHistory(getDeviceId(), 50);
+    const localIds = new Set(localAll.map(r => r.id));
+    setServerOnly(serverItems.filter(s => !localIds.has(s.id)));
+    setLoading(false);
+  }, []);
+
+  // M5: 屏卸载时取消异步加载
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await load();
+      if (!cancelled) {
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // load 在 mount-only useEffect 里调用一次，effect 自身 dependency []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onDelete = useCallback((id: string, isLocal: boolean) => {
+    Alert.alert('删除记录', '确定删除？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除', style: 'destructive', onPress: async () => {
+          if (isLocal) deleteLocalRecord(id);
+          await deleteJudgeHistoryServer(id);
+          load();
+        },
+      },
+    ]);
+  }, [load]);
+
+  // H4: rows 数组 useMemo 化。records / serverOnly 不变则不重建数组。
+  const rows = useMemo<HistoryRow[]>(() => [
+    ...records.map(r => ({ ...r, _isLocal: true } as HistoryRow)),
+    ...serverOnly.map(s => ({ ...s, _isLocal: false } as HistoryRow)),
+  ], [records, serverOnly]);
+
+  // H4: renderItem 抽 useCallback（依赖 theme + onDelete，引用在两者不变时稳定）
+  const renderItem = useCallback(({ item }: { item: HistoryRow }) => (
+    <HistoryRowView item={item} theme={theme} onLongPress={onDelete} />
+  ), [theme, onDelete]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -100,14 +131,11 @@ export default function JudgeHistoryScreen() {
         </View>
       ) : (
         <FlatList<HistoryRow>
-          data={[
-            ...records.map(r => ({ ...r, _isLocal: true } as HistoryRow)),
-            ...serverOnly.map(s => ({ ...s, _isLocal: false } as HistoryRow)),
-          ]}
+          data={rows}
           keyExtractor={(item: HistoryRow) => item.id + (item._isLocal ? '_L' : '_S')}
           contentContainerStyle={{ padding: spacing.lg }}
           ListEmptyComponent={<Text style={[styles.empty, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>暂无评卷记录</Text>}
-          renderItem={({ item }: { item: HistoryRow }) => renderItem({ item, isLocal: item._isLocal })}
+          renderItem={renderItem}
         />
       )}
     </SafeAreaView>

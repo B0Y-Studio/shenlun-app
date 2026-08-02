@@ -16,6 +16,7 @@ import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { ModeTabs } from '../components/ModeTabs';
 import { ArticleCard } from '../components/ArticleCard';
 import { getArticles } from '../api/client';
+import { getReadIds } from '../storage/mmkv';
 import type { Article } from '../storage/mmkv';
 import type { RootStackParamList } from '../App';
 import type { MainTabParamList } from '../App';
@@ -90,6 +91,16 @@ export default function SourceScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // H1: 已读 id 集合，focus / mount 时从 MMKV 读取。
+  // ArticleCard.isRead 接收真实状态（之前硬编码 false，卡片永远"未读"）。
+  // Set 用于 O(1) 命中，单屏 50-100 卡片不影响性能。
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set(getReadIds()));
+  useEffect(() => {
+    const refresh = () => setReadIds(new Set(getReadIds()));
+    const unsub = nav.addListener('focus', refresh);
+    return unsub;
+  }, [nav]);
 
   // M2: 从服务端拉数据（POST JSON 避免中文 URL 编码）
   // 服务端已支持 page/pageSize/total（docs/server/card_server.py:757-791），
@@ -228,10 +239,11 @@ export default function SourceScreen() {
       highlight={item.highlight}
       index={index + 1}
       total={visible.length}
-      isRead={false}
+      // H1: 真实已读状态（之前硬编码 false）
+      isRead={readIds.has(item.id)}
       onPress={() => onItemPress(item.id)}
     />
-  ), [visible.length, onItemPress]);
+  ), [visible.length, onItemPress, readIds]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>

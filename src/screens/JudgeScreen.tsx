@@ -20,13 +20,29 @@ export default function JudgeScreen({ route, navigation }: Props) {
   const question: Question | undefined = route.params?.question;
   const [answer, setAnswer] = useState('');
   const [running, setRunning] = useState(false);
-  const [streamText, setStreamText] = useState('');
+  // C1: 流式文本不再每次 delta setState。完整文本存 streamRef，
+  // displayTick 作为"重渲染触发器"；delta 只更新 ref，每累计 5 个或 80ms
+  // 通过 requestAnimationFrame 触发一次 setDisplayTick。1000 字流式过去
+  // 每次都全屏重渲染（JS 线程被占满、滚动卡顿、取消按钮响应延迟）的问题
+  // 直接消除。
+  const streamRef = useRef('');
+  const [displayTick, setDisplayTick] = useState(0);
+  const pendingRef = useRef(0);
+  const flushRef = useRef<number | null>(null);
   const [result, setResult] = useState<JudgeResult | null>(null);
   const [raw, setRaw] = useState('');
   const [hasConfig, setHasConfig] = useState<boolean | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // M16: 屏卸载守卫，避免异步流的 setState 落到已 unmount 组件
   const mountedRef = useRef(true);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushRef.current != null) return;
+    flushRef.current = requestAnimationFrame(() => {
+      flushRef.current = null;
+      if (mountedRef.current) setDisplayTick(t => t + 1);
+    });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -40,6 +56,10 @@ export default function JudgeScreen({ route, navigation }: Props) {
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      if (flushRef.current != null) {
+        cancelAnimationFrame(flushRef.current);
+        flushRef.current = null;
+      }
       abortRef.current?.abort();
     };
   }, []);
@@ -55,22 +75,45 @@ export default function JudgeScreen({ route, navigation }: Props) {
       return;
     }
     setRunning(true);
-    setStreamText('');
+    // C1: 初始化 streamRef + displayTick；displayTick 用于强制刷新 UI
+    streamRef.current = '';
+    pendingRef.current = 0;
+    if (flushRef.current != null) {
+      cancelAnimationFrame(flushRef.current);
+      flushRef.current = null;
+    }
+    setDisplayTick(0);
     setResult(null);
     setRaw('');
     const ac = new AbortController();
     abortRef.current = ac;
     const gen = runJudge(question, answer, getDeviceId(), { signal: ac.signal });
-    let collected = '';
     try {
       for await (const evt of gen) {
         if (!mountedRef.current) break;
         if (evt.type === 'delta') {
-          collected += evt.text;
-          if (mountedRef.current) setStreamText(collected);
+          // C1: 不再每 delta setState —— 写入 ref，累计 5 个或
+          // raf 已调度则复用。displayTick 是唯一 UI 触发器。
+          streamRef.current += evt.text;
+          pendingRef.current += 1;
+          if (pendingRef.current >= 5) {
+            pendingRef.current = 0;
+            scheduleFlush();
+          } else {
+            scheduleFlush();
+          }
         } else if (evt.type === 'result') {
-          if (mountedRef.current) setResult(evt.result);
-          if (mountedRef.current) setRaw(evt.raw);
+          // C1: 结果前先把所有 delta 提交到 UI（cancel 任何挂起 raf）
+          if (flushRef.current != null) {
+            cancelAnimationFrame(flushRef.current);
+            flushRef.current = null;
+          }
+          pendingRef.current = 0;
+          if (mountedRef.current) {
+            setDisplayTick(t => t + 1);
+            setResult(evt.result);
+            setRaw(evt.raw);
+          }
           if (evt.result) {
             addLocalRecord({
               questionId: question.id,
@@ -94,12 +137,18 @@ export default function JudgeScreen({ route, navigation }: Props) {
         Alert.alert('评卷中断', e instanceof Error ? e.message : String(e));
       }
     } finally {
+      // C1: 强制最后一帧确保最终文本可见
+      if (flushRef.current != null) {
+        cancelAnimationFrame(flushRef.current);
+        flushRef.current = null;
+      }
       if (mountedRef.current) {
+        setDisplayTick(t => t + 1);
         setRunning(false);
         abortRef.current = null;
       }
     }
-  }, [question, answer, hasConfig, navigation]);
+  }, [question, answer, hasConfig, navigation, scheduleFlush]);
 
   const onCancel = useCallback(() => abortRef.current?.abort(), []);
 
@@ -166,7 +215,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
           </Pressable>
         )}
 
-        {(running || streamText) && (
+        {(running || streamRef.current) && (
           <View style={[styles.streamCard, { backgroundColor: t.paper, borderColor: t.border }]}>
             <View style={styles.streamHead}>
               <ActivityIndicator color={t.seal} />
@@ -174,8 +223,10 @@ export default function JudgeScreen({ route, navigation }: Props) {
                 {running ? '正在评卷...' : '评语（流式）'}
               </Text>
             </View>
+            {/* C1: 渲染读取 streamRef；displayTick 触发整树重渲染但 ref
+                已是完整文本，单组件重渲染不会再让整屏重建任何非依赖组件。 */}
             <Text style={[styles.streamBody, { color: t.ink, fontFamily: fonts.kai.regular }]}>
-              {streamText || '等待响应...'}
+              {streamRef.current || '等待响应...'}
             </Text>
           </View>
         )}
