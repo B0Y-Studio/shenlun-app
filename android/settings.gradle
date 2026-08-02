@@ -12,6 +12,12 @@ pluginManagement {
 // (Re-add the foojay plugin when network egress to github.com is available.)
 // plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }
 
+// Toolchain download policy: NEVER download JDKs. Gradle only downloads a
+// toolchain when a repository is registered (foojay is the only provider) —
+// we register none, so a missing toolchain is a hard error instead of a
+// network hang. All toolchains come from the local install list in
+// GRADLE_USER_HOME/gradle.properties (org.gradle.java.installations.paths).
+
 rootProject.name = 'ShenlunApp'
 apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
 include ':app'

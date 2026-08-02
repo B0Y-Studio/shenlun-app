@@ -12,10 +12,27 @@ npm start
 等 Metro 显示 "Welcome to Metro!" 再回到 Android Studio Run。
 
 ### 坑 2：Android Studio 用错 JDK
-**症状**：Gradle sync 报错 "Could not find tools.jar" 或 Java 版本不对
+**症状**：Gradle sync 报错 "Could not find tools.jar" 或 Java 版本不对，或
+`Unable to download toolchain matching {languageVersion=17 ...} from https://api.foojay.io/...`
 **解决**：
 - File → Project Structure → SDK Location → Gradle JDK
-- 选 **JDK 17**（`C:\Users\hecto\jdk17\jdk-17.0.19+10`）或 **JBR 21**（`E:\softwares\jbr`）
+- **推荐选 JDK 17**（`C:\Users\hecto\jdk17\jdk-17.0.19+10`）：toolchain 17 直接由当前 JVM 满足，任何构建都不会去下载 JDK
+- 选 **JBR 21**（`E:\softwares\jbr`）现在也**不会**再触发 foojay 下载（见下方"foojay 根治"），但 JDK 17 依然最稳
+
+### 坑 2.1：foojay 下载超时（已根治，勿再删缓存）
+**症状**（历史问题，已修复）：
+```
+Could not determine the dependencies of task ':gradle-plugin:react-native-gradle-plugin:compileKotlin'.
+> Unable to download toolchain matching ({languageVersion=17, vendor=any, implementation=vendor-specific})
+  from 'https://api.foojay.io/disco/v3.0/ids/...'
+  > Connect to github.com:443 failed: Connection timed out
+```
+**根因**（三层原因，缺一都会复发）：
+1. `node_modules/@react-native/gradle-plugin/settings.gradle.kts` **子构建自己声明了 foojay**，且 included build **不继承**项目级 `gradle.properties` —— 主项目的 `auto-download=false` 管不到它。→ 已用 **patch-package** 注释掉（`patches/@react-native+gradle-plugin+0.74.87.patch`，`npm install` 时自动恢复）
+2. Studio 覆盖 `org.gradle.java.home`（daemon 用 JBR 21）→ 子构建找不到 JDK 17 → 触发下载。→ 已在 **`C:\Users\hecto\.gradle\gradle.properties`**（用户级，所有构建含 included build 都生效）写死 `paths=C:\Users\hecto\jdk17\jdk-17.0.19+10` + `auto-download=false`
+3. Gradle 只在注册了 toolchain 仓库时才下载；现在主构建和子构建都没有任何仓库 → **找不到 JDK 只会硬报错，永远不会去下载**
+
+**结论**：如果以后再看到 foojay 报错，说明以上某层被破坏（如重装 node_modules 但没跑 `npm install`、或用户级 gradle.properties 被删）。不要清 `.gradle` 缓存，先检查这三处。
 
 ### 坑 3：Gradle 找不到 Android SDK
 **症状**：`SDK location not found`
