@@ -1,0 +1,18 @@
+diff --git a/node_modules/@react-native/gradle-plugin/settings.gradle.kts b/node_modules/@react-native/gradle-plugin/settings.gradle.kts
+index b3c46a3..241e37d 100644
+--- a/node_modules/@react-native/gradle-plugin/settings.gradle.kts
++++ b/node_modules/@react-native/gradle-plugin/settings.gradle.kts
+@@ -13,7 +13,12 @@ pluginManagement {
+   }
+ }
+ 
+-plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }
++// PATCHED (patch-package): foojay-resolver-convention REMOVED — it tries to
++// reach api.foojay.io / github.com to auto-download JDK toolchains, which is
++// blocked on this network. All JDK toolchains are provided locally via
++// GRADLE_USER_HOME/gradle.properties (org.gradle.java.installations.paths).
++// See root android/settings.gradle for the same change.
++// plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }
+ 
+ include(
+     ":react-native-gradle-plugin",

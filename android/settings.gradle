@@ -1,10 +1,9 @@
-pluginManagement {
-  repositories {
-    google()
-    mavenCentral()
-    gradlePluginPortal()
-  }
-}
+// React Native 0.77+ uses a Gradle settings plugin (`com.facebook.react.settings`)
+// to autolink native modules, replacing the old
+// `apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")`
+// pattern that was removed when @react-native-community/cli-platform-android was
+// dropped from RN 0.77.
+//
 // foojay-resolver-convention REMOVED: it tries to HEAD github.com to discover
 // latest JDK 17, which times out on networks with restricted egress. We rely
 // on the org.gradle.java.home in gradle.properties to point at the local
@@ -18,7 +17,10 @@ pluginManagement {
 // network hang. All toolchains come from the local install list in
 // GRADLE_USER_HOME/gradle.properties (org.gradle.java.installations.paths).
 
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex -> ex.autolinkLibrariesFromCommand() }
+
 rootProject.name = 'ShenlunApp'
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')

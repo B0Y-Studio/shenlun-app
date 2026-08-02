@@ -1,4 +1,37 @@
 // ShenlunApp/src/llm/__tests__/client.test.ts
+
+// Mock the Nitro-based mmkv v4 so the import chain in src/llm/client.ts
+// (which transitively imports src/storage/mmkv) does not try to resolve
+// the NitroModules TurboModule (no native binary in Jest).
+jest.mock('../../storage/mmkv', () => {
+  const mem = new Map();
+  const instance = {
+    id: 'shenlun-storage',
+    set: (k, v) => mem.set(k, v),
+    getString: (k) => (typeof mem.get(k) === 'string' ? mem.get(k) : undefined),
+    getNumber: (k) => (typeof mem.get(k) === 'number' ? mem.get(k) : undefined),
+    getBoolean: (k) => (typeof mem.get(k) === 'boolean' ? mem.get(k) : undefined),
+    contains: (k) => mem.has(k),
+    delete: (k) => mem.delete(k),
+    clearAll: () => mem.clear(),
+    getAllKeys: () => Array.from(mem.keys()),
+  };
+  return {
+    getStorage: () => instance,
+    getDeviceId: () => 'test-device-id',
+    getCachedArticles: () => [],
+    setCachedArticles: () => {},
+    getReadIds: () => [],
+    markRead: () => {},
+    getReadHistory: () => [],
+    countReadInList: () => 0,
+    countReadsInWindow: () => 0,
+    getLocalNotes: () => [],
+    addLocalNote: () => {},
+    deleteLocalNote: () => {},
+  };
+});
+
 import { extractJsonByBraceDepth, safeParseJudgeResult } from '../client';
 
 describe('extractJsonByBraceDepth', () => {

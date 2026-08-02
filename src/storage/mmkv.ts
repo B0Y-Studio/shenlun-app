@@ -1,6 +1,7 @@
 // src/storage/mmkv.ts
 // 懒加载 MMKV + 全局错误降级，避免原生模块问题导致整个 App 启动崩溃
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
+import type { MMKV } from 'react-native-mmkv';
 
 let storage: MMKV | null = null;
 let storageFailed = false;
@@ -9,7 +10,8 @@ export function getStorage(): MMKV | null {
   if (storageFailed) return null;
   if (storage) return storage;
   try {
-    storage = new MMKV({ id: 'shenlun-storage' });
+    // mmkv v4 API: createMMKV(config) replaces `new MMKV(config)`.
+    storage = createMMKV({ id: 'shenlun-storage' });
     return storage;
   } catch (e) {
     console.warn('[mmkv] 初始化失败，将使用内存存储:', e);
