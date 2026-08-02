@@ -33,9 +33,16 @@ export const ArticleCard: React.FC<Props> = ({
     const parts = content.split(highlight);
     return (
       <Text style={[styles.content, { color: t.inkSoft }]} numberOfLines={4}>
-        {parts[0]}
-        <Text style={[styles.highlight, { backgroundColor: t.seal, color: t.paper }]}>{highlight}</Text>
-        {parts[1]}
+        {parts.map((p, i) => (
+          <React.Fragment key={i}>
+            {p}
+            {i < parts.length - 1 && (
+              <Text style={[styles.highlight, { backgroundColor: t.seal, color: t.paper }]}>
+                {highlight}
+              </Text>
+            )}
+          </React.Fragment>
+        ))}
       </Text>
     );
   };

@@ -41,14 +41,15 @@ export function extractJsonByBraceDepth(text: string): { json: string | null; st
   return { json: null, start, end: -1 };
 }
 
-export function safeParseJudgeResult(raw: string): JudgeResult | null {
+export function safeParseJudgeResult(raw: string, maxScore: number = 100): JudgeResult | null {
   const { json } = extractJsonByBraceDepth(raw);
   if (!json) return null;
   try {
     const o = JSON.parse(json) as Partial<JudgeResult>;
+    const total = Math.max(0, Math.min(maxScore, Number(o.total ?? 0)));
     return {
       commentary: typeof o.commentary === 'string' ? o.commentary : '',
-      total: Number(o.total ?? 0),
+      total,
       dimensions: Array.isArray(o.dimensions) ? o.dimensions.map(d => ({
         key: String(d.key ?? ''),
         score: Number(d.score ?? 0),
@@ -119,7 +120,7 @@ export async function* runJudge(
         if (!line) continue;
         const payload = line.slice(5).trim();
         if (payload === '[DONE]') {
-          const result = safeParseJudgeResult(fullText);
+          const result = safeParseJudgeResult(fullText, question.score);
           yield { type: 'result', result, raw: fullText };
           return;
         }
@@ -149,6 +150,6 @@ export async function* runJudge(
     try { reader.releaseLock(); } catch { /* ignore */ }
   }
   // 流未正常 DONE
-  const result = safeParseJudgeResult(fullText);
+  const result = safeParseJudgeResult(fullText, question.score);
   yield { type: 'result', result, raw: fullText };
 }

@@ -1,6 +1,7 @@
 // src/components/SplashScreen.tsx
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 import { fonts, spacing } from '../theme/tokens';
 
 interface Props {
@@ -10,13 +11,8 @@ interface Props {
 export const SplashScreen: React.FC<Props> = ({ onComplete }) => {
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-
-  // 颜色按系统主题动态选择
-  const colors = isDark
-    ? { bg: '#1C1714', seal: '#C04851', brass: '#C9A962', title: '#E8DFD4', slogan: '#8B7355' }
-    : { bg: '#F0EAD6', seal: '#C04851', brass: '#C9A962', title: '#1C1714', slogan: '#8B7355' };
+  const { theme } = useTheme();
+  const t = theme.tokens;
 
   useEffect(() => {
     Animated.parallel([
@@ -39,7 +35,7 @@ export const SplashScreen: React.FC<Props> = ({ onComplete }) => {
   }, []);
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <View style={[styles.wrap, { backgroundColor: t.bg }]}>
       <Animated.View
         style={[
           styles.logoBox,
@@ -49,13 +45,13 @@ export const SplashScreen: React.FC<Props> = ({ onComplete }) => {
           },
         ]}
       >
-        <View style={[styles.sealOuter, { borderColor: colors.seal }]}>
-          <View style={[styles.sealInner, { borderColor: colors.brass }]}>
-            <Text style={[styles.sealChar, { color: colors.seal }]}>申</Text>
+        <View style={[styles.sealOuter, { borderColor: t.seal }]}>
+          <View style={[styles.sealInner, { borderColor: t.brass }]}>
+            <Text style={[styles.sealChar, { color: t.seal }]}>申</Text>
           </View>
         </View>
-        <Text style={[styles.appName, { color: colors.title }]}>申论积累</Text>
-        <Text style={[styles.slogan, { color: colors.slogan }]}>日积月累，厚积薄发</Text>
+        <Text style={[styles.appName, { color: t.ink }]}>申论积累</Text>
+        <Text style={[styles.slogan, { color: t.inkMuted }]}>日积月累，厚积薄发</Text>
       </Animated.View>
     </View>
   );
