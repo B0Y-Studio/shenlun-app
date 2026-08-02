@@ -58,11 +58,14 @@ function makeSseStream(payloads: string[]): Response {
 }
 
 function makeAbortStream(): Response {
-  // 让 reader.read() 抛出一个 name='AbortError' 的 Error 实例，
   // 模拟 AbortController 在 RN 环境中发出的 abort 信号。
-  // 实现里 client 检查 `e instanceof Error && e.name === 'AbortError'` —— 必须满足。
-  const abortError = new Error('Aborted');
-  Object.defineProperty(abortError, 'name', { value: 'AbortError' });
+  // 在 RN 里 abort 抛出的实际是 DOMException，不继承自 Error，
+  // 因此必须用 `.name === 'AbortError'` 判定，不能依赖 `instanceof Error`。
+  // 这里用 plain object 模拟 DOMException-shape（非 Error 子类）来覆盖该路径。
+  const abortError: { name: string; message: string } = {
+    name: 'AbortError',
+    message: 'aborted',
+  };
   const stream = new ReadableStream({
     pull(controller) {
       controller.error(abortError);

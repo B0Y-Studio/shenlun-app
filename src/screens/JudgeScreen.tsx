@@ -86,9 +86,11 @@ export default function JudgeScreen({ route, navigation }: Props) {
           if (mountedRef.current) Alert.alert('评卷失败', `${evt.code}: ${evt.message}`);
         }
       }
-    } catch (e) {
-      // AbortError 是用户主动取消，静默；其它错误提示
-      if (mountedRef.current && !(e instanceof Error && e.name === 'AbortError')) {
+    } catch (e: unknown) {
+      // AbortError 是用户主动取消，静默；其它错误提示。
+      // 在 RN 中 AbortController.abort() 抛的是 DOMException，不继承自 Error，
+      // 因此必须用 `.name` 判定，不能用 `instanceof Error`。
+      if (mountedRef.current && (!e || (e as { name?: string })?.name !== 'AbortError')) {
         Alert.alert('评卷中断', e instanceof Error ? e.message : String(e));
       }
     } finally {

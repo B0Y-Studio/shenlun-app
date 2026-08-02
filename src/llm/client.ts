@@ -141,9 +141,11 @@ export async function* runJudge(
         }
       }
     }
-  } catch (e) {
-    // AbortError 是用户主动取消，静默；其它错误上报
-    if (!(e instanceof Error && e.name === 'AbortError')) {
+  } catch (e: unknown) {
+    // AbortError 是用户主动取消，静默；其它错误上报。
+    // 在 RN 中 AbortController.abort() 抛的是 DOMException，不继承自 Error，
+    // 因此必须用 `.name` 判定，不能用 `instanceof Error`。
+    if (!e || (e as { name?: string })?.name !== 'AbortError') {
       yield { type: 'error', code: 'stream', message: e instanceof Error ? e.message : String(e) };
     }
     return;
