@@ -68,3 +68,5 @@ __pycache__/
 android/app/release.keystore
 android/app/*.keystore
 !android/app/debug.keystore
+# 服务器数据备份（不入库）
+/server_backup_*/
