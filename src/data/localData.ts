@@ -72,6 +72,11 @@ export function getLocalDataVersion(): string {
   return `${a.version} · 时评 ${a.count} 篇 · 真题 ${PAPERS_FILE.paperCount} 卷 ${PAPERS_FILE.questionCount} 题`;
 }
 
+/** 打包时评总数（分析页"素材库"计数用；不触发索引构建） */
+export function localArticleCount(): number {
+  return ARTICLES.length;
+}
+
 // ---- 时评查询 ----
 
 export function localGetArticles(opts: {

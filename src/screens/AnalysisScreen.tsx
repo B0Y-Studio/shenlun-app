@@ -14,6 +14,8 @@ import {
   getLocalNotes, type Article, type Note, type ReadHistoryItem,
 } from '../storage/mmkv';
 import { getAnalyticsSummary } from '../api/client';
+import { isLocalMode } from '../config/dataMode';
+import { localArticleCount } from '../data/localData';
 import type { RootStackParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -78,7 +80,9 @@ export default function AnalysisScreen() {
         })();
 
     return {
-      articles: articles.length,
+      // 独立模式：素材库计数用打包数据（localData 里的 cached 是旧 MMKV 缓存，
+      // 独立模式下为空会显示 0 篇）；服务器模式维持原语义（本地缓存条数）
+      articles: isLocalMode() ? localArticleCount() : articles.length,
       totalReads,
       monthReads,
       notes: notes.length,
