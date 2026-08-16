@@ -8,7 +8,8 @@
 //     route.params 变化时屏内 effect 重新拉取数据即可
 //   - 副作用：若外部深链接切换 filter，屏不会重建，靠 presetThemeRef 重 fetch 触发刷新
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -246,7 +247,7 @@ export default function SourceScreen() {
   ), [visible.length, onItemPress, readIds]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
       {/* 顶部标题 */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]}>

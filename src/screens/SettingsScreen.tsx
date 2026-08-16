@@ -1,7 +1,8 @@
 // src/screens/SettingsScreen.tsx
 // 主题模式 + 数据源模式切换 + LLM 配置入口
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
@@ -36,7 +37,7 @@ export default function SettingsScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <View style={styles.body}>
         <Text style={[styles.title, { color: t.ink, fontFamily: fonts.serif.bold }]}>设 置</Text>
 

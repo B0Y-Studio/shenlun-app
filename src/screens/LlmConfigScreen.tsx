@@ -1,6 +1,7 @@
 // ShenlunApp/src/screens/LlmConfigScreen.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { PRESETS, findPreset, type Provider, type LlmConfig } from '../llm/provider';
@@ -84,7 +85,7 @@ export default function LlmConfigScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={styles.center}>
           <ActivityIndicator color={t.brass} />
         </View>
@@ -93,7 +94,7 @@ export default function LlmConfigScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
         <Text style={[styles.h1, { color: t.ink, fontFamily: fonts.serif.bold }]}>AI 评卷 · LLM 配置</Text>
         <Text style={[styles.h2, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>

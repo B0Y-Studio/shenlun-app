@@ -3,7 +3,8 @@
 // 数据源：本地 MMKV（getCachedArticles / getReadIds / getReadHistory / getLocalNotes）
 //   服务端没有题型字段，"薄弱题型" 用 "已读较少的主题" 替代
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -115,7 +116,7 @@ export default function AnalysisScreen() {
   }, [nav]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* 顶部标题 */}
         <View style={styles.header}>

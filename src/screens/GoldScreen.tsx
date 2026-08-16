@@ -1,6 +1,7 @@
 // src/screens/GoldScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getNotes, type Note } from '../api/client';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -49,7 +50,7 @@ export default function GoldScreen(props: Props) {
   }, [load]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       {/* 顶部导航 */}
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>

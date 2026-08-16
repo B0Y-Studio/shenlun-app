@@ -2,9 +2,9 @@
 // 题目 Tab: 真题库列表 + 详情（题干 / 答案 切换）
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable,
-  ActivityIndicator, FlatList, TextInput, RefreshControl,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, FlatList, TextInput, RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
@@ -142,7 +142,7 @@ export default function PaperScreen() {
   // Detail view: single question focused
   if (detail && activeQ) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
           <Pressable onPress={() => setActiveQ(null)} hitSlop={8}>
             <Text style={[styles.backText, { color: t.ink }]}>← 单题列表</Text>
@@ -178,7 +178,7 @@ export default function PaperScreen() {
   // Detail view: question list under paper
   if (detail && showQuestions) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
           <Pressable onPress={() => setShowQuestions(false)} hitSlop={8}>
             <Text style={[styles.backText, { color: t.ink }]}>← 全文</Text>
@@ -230,7 +230,7 @@ export default function PaperScreen() {
   if (detail) {
     const content = stripFrontmatter(detail.content);
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
           <Pressable onPress={closeDetail} hitSlop={8}>
             <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>
@@ -293,7 +293,7 @@ export default function PaperScreen() {
 
   // List view
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
       {/* 顶部筛选 */}
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <View style={styles.levelTabs}>

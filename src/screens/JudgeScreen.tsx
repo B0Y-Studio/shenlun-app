@@ -1,6 +1,7 @@
 // ShenlunApp/src/screens/JudgeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { useNavigation } from '@react-navigation/native';
@@ -160,7 +161,7 @@ export default function JudgeScreen({ route, navigation }: Props) {
   const onCancel = useCallback(() => abortRef.current?.abort(), []);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>

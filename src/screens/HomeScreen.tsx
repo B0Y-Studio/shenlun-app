@@ -2,7 +2,8 @@
 // V3 定稿首页 —— 头部(申论+农历日期) / 锦言 / 昨日总结 / 今日待做 / 5 行主菜单
 // 注意：底栏 TabBar 由 App.tsx 注入，此屏只负责内容滚动区
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ScrollView, StyleSheet, SafeAreaView, View, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
@@ -135,7 +136,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <StatusBar
         barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={t.bg}

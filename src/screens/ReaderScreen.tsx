@@ -1,6 +1,7 @@
 // src/screens/ReaderScreen.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getArticle, postNote, markReadRemote, type Article } from '../api/client';
 import { getCachedArticles, markRead } from '../storage/mmkv';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -100,7 +101,7 @@ export default function ReaderScreen(props: Props) {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={styles.loading}>
           <ActivityIndicator size="large" color={t.brass} />
         </View>
@@ -110,7 +111,7 @@ export default function ReaderScreen(props: Props) {
 
   if (!article) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
         <View style={styles.loading}>
           <Text style={[styles.errorText, { color: t.inkMuted }]}>文章未找到</Text>
         </View>
@@ -119,7 +120,7 @@ export default function ReaderScreen(props: Props) {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       {/* 顶部导航：单行 [← 返回] [flex spacer] */}
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>

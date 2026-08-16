@@ -6,7 +6,8 @@
 // - 主体底部: 案牍劳形 不废研读
 // - tag chip 点击 → navigation.navigate('Main', { screen: 'Source', params: { filter: { theme } } })
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, SectionList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SectionList, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
@@ -144,7 +145,7 @@ export default function ReviewScreen(props: Props) {
   ), [theme]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
           <Text style={[styles.back, { color: t.ink }]}>← 返回</Text>

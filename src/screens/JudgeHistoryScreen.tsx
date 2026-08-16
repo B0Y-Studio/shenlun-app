@@ -6,7 +6,8 @@
 // 3. `load` 只读一次 local 记录（之前 `listLocalRecords(50)` + `listLocalRecords(200)`
 //    各跑一次，MMKV 二次 JSON.parse；现在统一读 200 条 + 切片）
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { useNavigation } from '@react-navigation/native';
@@ -116,7 +117,7 @@ export default function JudgeHistoryScreen() {
   ), [theme, onDelete]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
       <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
         <Pressable onPress={() => nav.goBack()} hitSlop={8}>
           <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>
