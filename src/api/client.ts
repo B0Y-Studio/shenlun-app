@@ -1,8 +1,14 @@
 // src/api/client.ts
-import { getDeviceId, getCachedArticles, setCachedArticles, type Article, type Note } from '../storage/mmkv';
+import { getDeviceId, getCachedArticles, setCachedArticles, getLocalNotes, addLocalNote, type Article, type Note } from '../storage/mmkv';
 export type { Article, Note };
 
 import { API_BASE as BASE } from '../config/api';
+import { isLocalMode } from '../config/dataMode';
+import {
+  localGetDaily, localGetArticle, localGetArticlesByIds, localGetArticles,
+  localAnalyticsSummary, localAnalyticsThemes, localGetPapers, localGetPaper,
+  localGetQuestions,
+} from '../data/localData';
 import { fetchWithTimeout } from './fetchWithTimeout';
 
 function deviceId(): string { return getDeviceId(); }
@@ -22,6 +28,8 @@ export function mapArticle(card: any): Article {
 }
 
 export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<{ items: Article[]; online: boolean }> {
+  // 独立模式：本地打包数据确定性选 3 篇（服务器代码原样保留在下方）
+  if (isLocalMode()) return localGetDaily();
   try {
     const res = await fetchWithTimeout(`${BASE}/api/today?device_id=${deviceId()}`, { signal: opts.signal });
     if (!res.ok) throw new Error('API error');
@@ -38,6 +46,8 @@ export async function getDaily(opts: { signal?: AbortSignal } = {}): Promise<{ i
 }
 
 export async function getArticle(id: string): Promise<Article | null> {
+  // 独立模式
+  if (isLocalMode()) return localGetArticle(id);
   try {
     // id 是 file_path（含中文 / 斜杠 / `&` 等），必须 encodeURIComponent
     const url = `${BASE}/api/article/${encodeURIComponent(id)}`;
@@ -53,6 +63,8 @@ export async function getArticle(id: string): Promise<Article | null> {
 // 后端路由尚未上线，返回网络/4xx/5xx 时返回空数组，避免阻塞 UI
 export async function getArticlesByIds(ids: string[]): Promise<{items: Article[]; missing: string[]}> {
   if (!ids.length) return { items: [], missing: [] };
+  // 独立模式
+  if (isLocalMode()) return localGetArticlesByIds(ids);
   try {
     const url = `${BASE}/api/articles?id-list=${encodeURIComponent(ids.join(','))}&device_id=${deviceId()}`;
     const res = await fetchWithTimeout(url);
@@ -103,6 +115,8 @@ export async function getArticles(opts: {
   pageSize?: number;
   with_summary?: boolean;  // 服务端返回每篇 summary 字段（增加 IO）
 } = {}): Promise<ArticlesListResult> {
+  // 独立模式：本地过滤 + 分页 + facets 聚合（全量 1233 篇在内存索引里）
+  if (isLocalMode()) return localGetArticles(opts);
   try {
     const body: Record<string, any> = {};
     if (opts.theme)  body.theme  = opts.theme;
@@ -182,6 +196,8 @@ export interface AnalyticsSummary {
 }
 
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
+  // 独立模式：read_history × 全量本地文章聚合
+  if (isLocalMode()) return localAnalyticsSummary();
   try {
     const url = `${BASE}/api/analytics/summary?device_id=${deviceId()}`;
     const res = await fetchWithTimeout(url);
@@ -212,6 +228,8 @@ export interface AnalyticsThemes {
 }
 
 export async function getAnalyticsThemes(top = 10): Promise<AnalyticsThemes> {
+  // 独立模式
+  if (isLocalMode()) return localAnalyticsThemes(top);
   try {
     const url = `${BASE}/api/analytics/themes?device_id=${deviceId()}&top=${top}`;
     const res = await fetchWithTimeout(url);
@@ -230,6 +248,8 @@ export async function getAnalyticsThemes(top = 10): Promise<AnalyticsThemes> {
 
 // 同步已读到服务端（POST /api/mark-read）
 export async function markReadRemote(article: Article): Promise<boolean> {
+  // 独立模式：没有服务端可同步，直接 no-op（本地已读记录由 markRead 维护）
+  if (isLocalMode()) { void article; return false; }
   try {
     // norm 是服务端规范化后的标题（/api/articles / /api/today 响应里带回）
     // 用于服务端 analytics 把 reads 与 article metadata 正确关联
@@ -286,6 +306,8 @@ export async function getPapers(opts: {
   page?: number;
   pageSize?: number;
 } = {}): Promise<PaperListResp> {
+  // 独立模式：本地真题库（1063 卷 / 4925 题，打包自 E 盘题库）
+  if (isLocalMode()) return localGetPapers(opts);
   try {
     const params = new URLSearchParams();
     if (opts.level) params.set('level', opts.level);
@@ -309,6 +331,8 @@ export interface PaperDetail extends Paper {
 }
 
 export async function getPaper(id: string): Promise<PaperDetail | null> {
+  // 独立模式
+  if (isLocalMode()) return localGetPaper(id);
   try {
     const url = `${BASE}/api/paper?id=${encodeURIComponent(id)}`;
     const res = await fetchWithTimeout(url);
@@ -340,6 +364,8 @@ export interface QuestionsResp {
 }
 
 export async function getQuestions(paperId: string): Promise<QuestionsResp> {
+  // 独立模式
+  if (isLocalMode()) return localGetQuestions(paperId);
   try {
     const url = `${BASE}/api/questions?paper_id=${encodeURIComponent(paperId)}`;
     const res = await fetchWithTimeout(url);
@@ -351,6 +377,8 @@ export async function getQuestions(paperId: string): Promise<QuestionsResp> {
 }
 
 export async function getNotes(): Promise<Note[]> {
+  // 独立模式：金句笔记读本地 MMKV（local_notes，ReaderScreen 标记时写入）
+  if (isLocalMode()) return getLocalNotes();
   try {
     const res = await fetchWithTimeout(`${BASE}/api/notes?device_id=${deviceId()}`);
     if (!res.ok) return [];
@@ -362,6 +390,12 @@ export async function getNotes(): Promise<Note[]> {
 }
 
 export async function postNote(note: Omit<Note, 'id'>): Promise<Note | null> {
+  // 独立模式：写本地 MMKV（生成与 local- 前缀风格一致的 id）
+  if (isLocalMode()) {
+    const full: Note = { ...note, id: `local-note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+    addLocalNote(full);
+    return full;
+  }
   try {
     const res = await fetchWithTimeout(`${BASE}/api/notes`, {
       method: 'POST',

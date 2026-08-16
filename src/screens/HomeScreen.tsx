@@ -14,6 +14,7 @@ import { TodayTaskBanner } from '../components/TodayTaskBanner';
 import { MenuList } from '../components/MenuList';
 import { getDaily, type Article } from '../api/client';
 import { getReadIds, markRead } from '../storage/mmkv';
+import { isLocalMode } from '../config/dataMode';
 import type { RootStackParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -25,6 +26,8 @@ export default function HomeScreen() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  // 独立模式标识：头部显示 "· 本地数据"（服务器模式 + 离线时为 false）
+  const [localMode, setLocalMode] = useState(false);
 
   // 头部日期（公历，简化为"X月/日"表示；以后可换真农历）
   const headerDate = useMemo(() => buildHeaderDate(new Date()), []);
@@ -34,8 +37,8 @@ export default function HomeScreen() {
       // M14: getDaily 现在返回 {items, online}，解构使用
       const { items, online } = await getDaily({ signal });
       setArticles(items);
-      // 当前 HomeScreen 暂未对 offline 提示，本期先记录供后续迭代用
-      void online;
+      // 独立模式（数据源=本地）时 online 恒为 false —— 头部显示本地标识
+      setLocalMode(isLocalMode() || !online);
     } catch (e: any) {
       // AbortError 表示组件卸载 / 5s 超时 / fetch 被 controller.abort() 取消
       // 此时 setArticles([]) 会清掉 state 里的内容（包括之前 fetch 成功的缓存）
@@ -170,6 +173,12 @@ export default function HomeScreen() {
               {headerDate.line2}
             </Text>
           </View>
+          {/* 独立模式 / 离线标识（数据源=本地 或 服务器不可达时显示） */}
+          {localMode ? (
+            <Text style={[styles.localBadge, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+              · 本地数据
+            </Text>
+          ) : null}
         </View>
 
         {/* 锦言 */}
@@ -234,5 +243,6 @@ const styles = StyleSheet.create({
   dateLine: { fontSize: 13, letterSpacing: 2, lineHeight: 20 },
   loading: { paddingVertical: spacing.lg, alignItems: 'center' },
   loadingText: { marginTop: spacing.xs, fontSize: fontSizes.caption, letterSpacing: 4 },
+  localBadge: { position: 'absolute', right: 0, bottom: 4, fontSize: fontSizes.micro, letterSpacing: 2 },
   footer: { textAlign: 'center', fontSize: 11, letterSpacing: 6, marginTop: spacing.md, marginBottom: spacing.sm },
 });

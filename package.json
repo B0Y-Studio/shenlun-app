@@ -10,6 +10,7 @@
     "test": "jest",
     "bundle:debug": "react-native bundle --platform android --dev true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "bundle:release": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
+    "build:data": "node scripts/build-local-data.mjs",
     "postinstall": "patch-package",
     "_build:debug": "cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleDebug',{stdio:'inherit'})\"",
     "_build:release": "cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleRelease',{stdio:'inherit'})\"",

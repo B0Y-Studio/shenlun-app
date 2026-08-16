@@ -10,6 +10,7 @@ import { runJudge, type JudgeResult } from '../llm/client';
 import { addLocalRecord } from '../llm/judgeStore';
 import { fetchLlmConfig } from '../api/llmConfig';
 import { getDeviceId } from '../storage/mmkv';
+import { isLocalMode } from '../config/dataMode';
 import type { Question } from '../api/client';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Judge'>;
@@ -68,6 +69,12 @@ export default function JudgeScreen({ route, navigation }: Props) {
     if (!question) { Alert.alert('未选题目'); return; }
     if (answer.trim().length < 50) { Alert.alert('答案太短', '至少 50 字'); return; }
     if (!hasConfig) {
+      if (isLocalMode()) {
+        Alert.alert('独立模式下暂不可用', 'AI 评卷需要连接服务器。\n新服务器就绪后，到 设置 → 数据源 切换为"服务器"模式即可使用。', [
+          { text: '知道了', style: 'cancel' },
+        ]);
+        return;
+      }
       Alert.alert('未配置 LLM', '请到设置 → AI 评卷配置 Key', [
         { text: '去配置', onPress: () => navigation.navigate('LlmConfig') },
         { text: '取消', style: 'cancel' },
