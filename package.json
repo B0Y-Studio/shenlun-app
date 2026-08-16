@@ -10,11 +10,12 @@
     "test": "jest",
     "bundle:debug": "react-native bundle --platform android --dev true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "bundle:release": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
+    "hermesc:win": "node -e \"const{execSync}=require('child_process');const path=require('path');const root=process.cwd();const h=path.join(root,'node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe');const b=path.join(root,'android/app/src/main/assets/index.android.bundle');const fs=require('fs');if(!fs.existsSync(b)){console.error('bundle 不存在，先跑 bundle:release');process.exit(1)};console.log('hermesc 编译 HBC…');execSync('\\\"'+h+'\\\" -emit-binary -out \\\"'+b+'\\\" \\\"'+b+'\\\"',{stdio:'inherit',shell:true})\"",
     "build:data": "node scripts/build-local-data.mjs",
     "postinstall": "patch-package",
     "_build:debug": "cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleDebug',{stdio:'inherit'})\"",
     "_build:release": "cd android && node -e \"const{platform}=require('os');const cmd=platform==='win32'?'gradlew.bat':'./gradlew';require('child_process').execSync(cmd+' clean assembleRelease',{stdio:'inherit'})\"",
-    "build:debug": "npm run bundle:release && npm run _build:debug",
+    "build:debug": "npm run bundle:release && npm run hermesc:win && npm run _build:debug",
     "build:release": "npm run bundle:release && npm run _build:release"
   },
   "dependencies": {

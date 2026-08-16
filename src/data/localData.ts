@@ -6,6 +6,14 @@
 // 网络代码（src/api/client.ts 的服务器分支）原样保留，由
 // src/config/dataMode.ts 决定走哪条路。
 //
+// 性能设计（数据不可变 → 三级缓存，全部惰性）：
+// 1. JSON 惰性加载：require 从模块顶层移到首次访问（papers 21.5MB 只有
+//    真题/评卷路径才触发，时评 6.25MB 首页触发）—— 冷启动不再同步解析 28MB
+// 2. facets 全量聚合只算一次（themes/sources/dates）
+// 3. 过滤结果按 filterKey 缓存（翻页同 key 直接复用，切分类才重算）
+// 4. 卡片 Article 对象按 id 缓存 —— 翻页时旧项引用稳定，ArticleCard 的
+//    React.memo 真正生效
+//
 // 注意：本模块导出的查询函数只覆盖 client.ts 需要本地化的部分；
 // AI 评卷（/api/judge/*）是服务器代理架构，本地模式不提供替代实现。
 
@@ -15,10 +23,6 @@ import type {
 } from '../api/client';
 import type { Article as LocalArticle } from '../storage/mmkv';
 import { getReadHistory, setCachedArticles } from '../storage/mmkv';
-
-// ---- 打包数据（构建期内联；类型宽一些，字段以打包脚本产出为准） ----
-import articlesJson from './articles.local.json';
-import papersJson from './papers.local.json';
 
 interface LocalArticleRecord {
   id: string; norm: string; title: string; date: string; source: string;
@@ -32,14 +36,35 @@ interface LocalPapersFile {
   contents: Record<string, string>;
 }
 
-const ARTICLES = (articlesJson as { version: string; count: number; items: LocalArticleRecord[] }).items;
-const PAPERS_FILE = papersJson as unknown as LocalPapersFile;
+// ---- 惰性数据加载（避免冷启动同步解析 28MB JSON） ----
+
+let _articlesCache: { version: string; count: number; items: LocalArticleRecord[] } | null = null;
+function ARTICLES_DATA(): { version: string; count: number; items: LocalArticleRecord[] } {
+  if (!_articlesCache) {
+    // Metro/CJS require：首次调用时才解析 JSON
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _articlesCache = require('./articles.local.json');
+  }
+  return _articlesCache;
+}
+function ARTICLES(): LocalArticleRecord[] {
+  return ARTICLES_DATA().items;
+}
+
+let _papersCache: LocalPapersFile | null = null;
+function PAPERS_FILE(): LocalPapersFile {
+  if (!_papersCache) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _papersCache = require('./papers.local.json') as LocalPapersFile;
+  }
+  return _papersCache;
+}
 
 // ---- 内存索引（首访构建一次） ----
 let byId: Map<string, LocalArticleRecord> | null = null;
 function getIndex(): Map<string, LocalArticleRecord> {
   if (!byId) {
-    byId = new Map(ARTICLES.map(a => [a.id, a]));
+    byId = new Map(ARTICLES().map(a => [a.id, a]));
   }
   return byId;
 }
@@ -62,19 +87,84 @@ function toCardArticle(a: LocalArticleRecord): Article {
   };
 }
 
+// 卡片对象缓存：翻页时旧项引用稳定 → ArticleCard 的 React.memo 生效
+const cardCache = new Map<string, Article>();
+function cardOf(a: LocalArticleRecord): Article {
+  let c = cardCache.get(a.id);
+  if (!c) {
+    c = toCardArticle(a);
+    cardCache.set(a.id, c);
+  }
+  return c;
+}
+
 function toFullArticle(a: LocalArticleRecord): Article {
   return { ...toCardArticle(a), content: a.content };
 }
 
 // ---- 版本信息（设置页显示） ----
 export function getLocalDataVersion(): string {
-  const a = articlesJson as { version: string; count: number };
-  return `${a.version} · 时评 ${a.count} 篇 · 真题 ${PAPERS_FILE.paperCount} 卷 ${PAPERS_FILE.questionCount} 题`;
+  const a = ARTICLES_DATA();
+  const p = PAPERS_FILE();
+  return `${a.version} · 时评 ${a.count} 篇 · 真题 ${p.paperCount} 卷 ${p.questionCount} 题`;
 }
 
 /** 打包时评总数（分析页"素材库"计数用；不触发索引构建） */
 export function localArticleCount(): number {
-  return ARTICLES.length;
+  return ARTICLES().length;
+}
+
+// ---- facets 全量聚合（数据不变 → 只算一次） ----
+
+interface Facets {
+  themes: Array<{ key: string; count: number }>;
+  sources: Array<{ key: string; count: number }>;
+  dates: Array<{ key: string; count: number }>;
+}
+let facetsCache: Facets | null = null;
+function getFacets(): Facets {
+  if (facetsCache) return facetsCache;
+  // themes：按全部 tags 展开（一篇文章计入它的每个 tag —— 与服务器
+  // list_articles 的聚合一致），并剔除无区分度的元标签：
+  // '时评'/'学习强国'（全量命中）与 'YYYY-MM' 月份标签（date 模式已有）
+  const themes: Record<string, number> = {};
+  const sources: Record<string, number> = {};
+  const dates: Record<string, number> = {};
+  const META_TAG = /^(时评|学习强国|\d{4}-\d{2})$/;
+  for (const a of ARTICLES()) {
+    for (const tag of a.tags) {
+      if (META_TAG.test(tag)) continue;
+      themes[tag] = (themes[tag] || 0) + 1;
+    }
+    sources[a.source || '未署名'] = (sources[a.source || '未署名'] || 0) + 1;
+    const m = a.month || a.date.slice(0, 7) || '未知';
+    dates[m] = (dates[m] || 0) + 1;
+  }
+  facetsCache = {
+    themes: Object.entries(themes).sort((x, y) => y[1] - x[1]).map(([key, count]) => ({ key, count })),
+    sources: Object.entries(sources).sort((x, y) => y[1] - x[1]).map(([key, count]) => ({ key, count })),
+    dates: Object.entries(dates).sort((x, y) => y[0].localeCompare(x[0])).map(([key, count]) => ({ key, count })),
+  };
+  return facetsCache;
+}
+
+// ---- 过滤缓存（同一 filterKey 翻页直接复用） ----
+
+let filterCache: { key: string; list: LocalArticleRecord[] } | null = null;
+function filterArticles(opts: { theme?: string; source?: string; date?: string; q?: string }): LocalArticleRecord[] {
+  const key = JSON.stringify([opts.theme ?? '', opts.source ?? '', opts.date ?? '', opts.q ?? '']);
+  if (filterCache && filterCache.key === key) return filterCache.list;
+  let list = ARTICLES();
+  if (opts.theme) list = list.filter(a => a.tags.includes(opts.theme!));
+  if (opts.source) list = list.filter(a => a.source === opts.source);
+  if (opts.date) list = list.filter(a => a.date.startsWith(opts.date!));
+  if (opts.q) {
+    const kw = opts.q.toLowerCase();
+    list = list.filter(a =>
+      a.title.toLowerCase().includes(kw) || a.summary.toLowerCase().includes(kw));
+  }
+  filterCache = { key, list };
+  return list;
 }
 
 // ---- 时评查询 ----
@@ -86,44 +176,19 @@ export function localGetArticles(opts: {
   const page = Math.max(1, opts.page ?? 1);
   const pageSize = Math.max(1, Math.min(200, opts.pageSize ?? 50));
 
-  let list = ARTICLES;
-  if (opts.theme) list = list.filter(a => a.tags.includes(opts.theme!));
-  if (opts.source) list = list.filter(a => a.source === opts.source);
-  if (opts.date) list = list.filter(a => a.date.startsWith(opts.date!));
-  if (opts.q) {
-    const kw = opts.q.toLowerCase();
-    list = list.filter(a =>
-      a.title.toLowerCase().includes(kw) || a.summary.toLowerCase().includes(kw));
-  }
-
-  // facets 在过滤后的集合上聚合（与服务端语义一致：过滤后可见的分组）
-  // themes：按全部 tags 展开（一篇文章计入它的每个 tag —— 与服务器
-  // list_articles 的聚合一致），并剔除无区分度的元标签：
-  // '时评'/'学习强国'（全量命中）与 'YYYY-MM' 月份标签（date 模式已有）
-  const themes: Record<string, number> = {};
-  const sources: Record<string, number> = {};
-  const dates: Record<string, number> = {};
-  const META_TAG = /^(时评|学习强国|\d{4}-\d{2})$/;
-  for (const a of ARTICLES) {
-    for (const tag of a.tags) {
-      if (META_TAG.test(tag)) continue;
-      themes[tag] = (themes[tag] || 0) + 1;
-    }
-    sources[a.source || '未署名'] = (sources[a.source || '未署名'] || 0) + 1;
-    const m = a.month || a.date.slice(0, 7) || '未知';
-    dates[m] = (dates[m] || 0) + 1;
-  }
+  const list = filterArticles(opts);
+  const facets = getFacets();
 
   const start = (page - 1) * pageSize;
-  const items = list.slice(start, start + pageSize).map(toCardArticle);
+  const items = list.slice(start, start + pageSize).map(cardOf);
   return {
     items,
     total: list.length,
     page,
     pageSize,
-    themes: Object.entries(themes).sort((x, y) => y[1] - x[1]).map(([key, count]) => ({ key, count })),
-    sources: Object.entries(sources).sort((x, y) => y[1] - x[1]).map(([key, count]) => ({ key, count })),
-    dates: Object.entries(dates).sort((x, y) => y[0].localeCompare(x[0])).map(([key, count]) => ({ key, count })),
+    themes: facets.themes,
+    sources: facets.sources,
+    dates: facets.dates,
     online: false,
   };
 }
@@ -154,17 +219,33 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
+// 近 90 天候选池按日期缓存（同一天内 focus 重拉不再重过滤）
+let dailyPoolCache: { cutoff: string; pool: LocalArticleRecord[] } | null = null;
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function localGetDaily(n = 3): { items: Article[]; online: boolean } {
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
-  const daySeed = hashStr(`${yyyy}-${mm}-${dd}`);
+  const dayStr = `${yyyy}-${mm}-${dd}`;
+  const daySeed = hashStr(dayStr);
 
   // 候选：最近 90 天的文章优先（保持新鲜度），不足再扩到全量
-  const cutoff = `${yyyy}-${mm}-${dd}`;
-  const recent = ARTICLES.filter(a => a.date >= addDays(cutoff, -90));
-  const pool = recent.length >= n * 3 ? recent : ARTICLES;
+  const cutoff = addDays(dayStr, -90);
+  if (!dailyPoolCache || dailyPoolCache.cutoff !== cutoff) {
+    const recent = ARTICLES().filter(a => a.date >= cutoff);
+    dailyPoolCache = { cutoff, pool: recent.length >= n * 3 ? recent : ARTICLES() };
+  }
+  const pool = dailyPoolCache.pool;
 
   // daySeed 做确定性起点轮转 —— 同一天结果稳定，跨天不重复
   const start = daySeed % Math.max(1, pool.length);
@@ -181,15 +262,6 @@ export function localGetDaily(n = 3): { items: Article[]; online: boolean } {
   return { items, online: false };
 }
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 // ---- 真题查询 ----
 
 export function localGetPapers(opts: {
@@ -198,7 +270,7 @@ export function localGetPapers(opts: {
 } = {}): PaperListResp {
   const page = Math.max(1, opts.page ?? 1);
   const pageSize = Math.max(1, opts.pageSize ?? 50);
-  let list = PAPERS_FILE.papers;
+  let list = PAPERS_FILE().papers;
   if (opts.level) list = list.filter(p => p.level === opts.level);
   if (opts.province) list = list.filter(p => p.province.includes(opts.province!));
   if (opts.year) list = list.filter(p => p.year === opts.year);
@@ -217,17 +289,17 @@ export function localGetPapers(opts: {
 }
 
 export function localGetPaper(id: string): PaperDetail | null {
-  const p = PAPERS_FILE.papers.find(x => x.id === id);
+  const p = PAPERS_FILE().papers.find(x => x.id === id);
   if (!p) return null;
   return {
     ...p,
     filename: id,
-    content: PAPERS_FILE.contents[id] ?? '',
+    content: PAPERS_FILE().contents[id] ?? '',
   };
 }
 
 export function localGetQuestions(paperId: string): QuestionsResp {
-  const items = PAPERS_FILE.questions[paperId] ?? [];
+  const items = PAPERS_FILE().questions[paperId] ?? [];
   return { items, total: items.length, paper_id: paperId };
 }
 
@@ -237,7 +309,6 @@ export function localAnalyticsSummary(): AnalyticsSummary {
   const history = getReadHistory();
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;
-  const todayStr = new Date().toISOString().slice(0, 10);
 
   const idx = getIndex();
   const themes: Record<string, number> = {};
@@ -256,7 +327,6 @@ export function localAnalyticsSummary(): AnalyticsSummary {
     if (now - h.at < 7 * DAY) weekReads += 1;
     if (now - h.at < 30 * DAY) monthReads += 1;
   }
-  void todayStr;
 
   const sortDesc = (o: Record<string, number>) =>
     Object.entries(o).sort((x, y) => y[1] - x[1]).map(([key, count]) => ({ key, count }));

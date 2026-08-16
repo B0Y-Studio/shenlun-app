@@ -32,17 +32,22 @@ function joinMetaParts(article: Article): string[] {
 /**
  * 阅读态正文：按 highlights（已按 start 升序）把 content 切成
  * 普通段 + 高亮段（嵌套 Text 上背景色）。高亮段长按删除。
- * 相邻区间已由 store 保证不重叠。
+ * 相邻区间已由 store 保证不重叠。切段结果由调用方 useMemo 缓存。
  */
-function HighlightedBody({ content, highlights, baseStyle, onRemove }: {
-  content: string;
-  highlights: TextHighlight[];
+function HighlightedBody({ parts, baseStyle }: {
+  parts: React.ReactNode[];
   baseStyle: object;
-  onRemove: (h: TextHighlight) => void;
 }) {
-  if (highlights.length === 0) {
-    return <Text style={baseStyle as never}>{content}</Text>;
-  }
+  return <Text style={baseStyle as never}>{parts}</Text>;
+}
+
+/** content × highlights → 分段节点数组（高亮段带长按删除） */
+function buildHighlightParts(
+  content: string,
+  highlights: TextHighlight[],
+  onRemove: (h: TextHighlight) => void,
+): React.ReactNode[] {
+  if (highlights.length === 0) return [content];
   const parts: React.ReactNode[] = [];
   let cursor = 0;
   highlights.forEach((h, i) => {
@@ -69,7 +74,7 @@ function HighlightedBody({ content, highlights, baseStyle, onRemove }: {
   if (cursor < content.length) {
     parts.push(<Text key="tail">{content.slice(cursor)}</Text>);
   }
-  return <Text style={baseStyle as never}>{parts}</Text>;
+  return parts;
 }
 
 export default function ReaderScreen(props: Props) {
@@ -227,7 +232,15 @@ export default function ReaderScreen(props: Props) {
     );
   }
 
-  const bodyBaseStyle = [styles.content, { color: t.inkSoft, fontFamily: fonts.serif.regular }];
+  const bodyBaseStyle = useMemo(
+    () => [styles.content, { color: t.inkSoft, fontFamily: fonts.serif.regular }],
+    [t.inkSoft],
+  );
+  // 切段结果缓存：正文 × 高亮不变时（toast/mode 切换等重渲染）不重切
+  const highlightParts = useMemo(
+    () => buildHighlightParts(content, highlights, onRemoveHighlight),
+    [content, highlights, onRemoveHighlight],
+  );
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -257,12 +270,7 @@ export default function ReaderScreen(props: Props) {
 
         {/* 正文：阅读态分段渲染高亮；标注态 TextInput 报告选区 */}
         {mode === 'read' ? (
-          <HighlightedBody
-            content={content}
-            highlights={highlights}
-            baseStyle={bodyBaseStyle}
-            onRemove={onRemoveHighlight}
-          />
+          <HighlightedBody parts={highlightParts} baseStyle={bodyBaseStyle} />
         ) : (
           <TextInput
             value={content}

@@ -34,6 +34,27 @@ const MODE_OPTIONS: Array<{ key: Mode; label: string }> = [
 
 interface GroupBucket { key: string; count: number }
 
+// 行组件：把 per-item 的 onPress 闭包收在 memo 内部 —— renderArticle 引用
+// 变化（翻页）时旧行 props 全部相等（item 引用来自 cardCache 稳定），
+// 直接跳过重渲染。
+const ArticleRow = React.memo(function ArticleRow({ item, index, total, isRead, onItemPress }: {
+  item: Article; index: number; total: number; isRead: boolean;
+  onItemPress: (id: string) => void;
+}) {
+  return (
+    <ArticleCard
+      chapter={item.chapter || (item.tags?.[0] ?? '')}
+      title={item.title}
+      content={item.content || item.highlight || '（暂无摘要，点击阅读全文）'}
+      highlight={item.highlight}
+      index={index + 1}
+      total={total}
+      isRead={isRead}
+      onPress={() => onItemPress(item.id)}
+    />
+  );
+});
+
 export default function SourceScreen() {
   const { theme } = useTheme();
   const t = theme.tokens;
@@ -206,20 +227,17 @@ export default function SourceScreen() {
     );
   }, [activeGroup, onSelectGroup, t.divider, t.seal, t.paper, t.inkSoft]);
 
-  // L7: 顺手把 SourceScreen 主 FlatList 的 renderItem 也 useCallback 化。
+  // L7: renderItem useCallback；total 用该分类总数（固定值，此前用
+  // visible.length —— 每次翻页 M 变化导致全部卡片 memo 失效重渲掉帧）
   const renderArticle = useCallback(({ item, index }: { item: Article; index: number }) => (
-    <ArticleCard
-      chapter={item.chapter || (item.tags?.[0] ?? '')}
-      title={item.title}
-      content={item.content || item.highlight || '（暂无摘要，点击阅读全文）'}
-      highlight={item.highlight}
-      index={index + 1}
-      total={visible.length}
-      // H1: 真实已读状态（之前硬编码 false）
+    <ArticleRow
+      item={item}
+      index={index}
+      total={total}
       isRead={readIds.has(item.id)}
-      onPress={() => onItemPress(item.id)}
+      onItemPress={onItemPress}
     />
-  ), [visible.length, onItemPress, readIds]);
+  ), [total, onItemPress, readIds]);
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: t.bg }]}>
@@ -279,6 +297,11 @@ export default function SourceScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.5}
           renderItem={renderArticle}
+          // 卡片很高（一屏约 2 张）：默认 initialNumToRender=10 会一次性
+          // 布局 5 屏内容；收紧批次让首帧/翻页时 JS 线程尖峰更小
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={7}
           ListEmptyComponent={
             <View style={styles.center}>
               <Text style={[styles.empty, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>

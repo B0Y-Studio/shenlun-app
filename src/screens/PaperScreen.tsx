@@ -113,30 +113,39 @@ export default function PaperScreen() {
     setShowQuestions(true);
   }, [detail]);
 
-  // L7: renderItem 抽 useCallback —— PaperScreen 自身加载时 setPapers
-  // 会触发整屏渲染，没有 useCallback 会重建所有 Pressable + 内联 style。
+  // L7: renderItem 抽 useCallback + 行组件 memo —— per-item 的 onPress
+  // 闭包收在 PaperRow 内部；筛选/加载导致列表变化时旧行 props 相等
+  // 直接跳过重渲染（1063 卷列表滚动/筛选更顺）
+  const PaperRow = React.memo(function PaperRow({ item, openPaper: onOpen }: {
+    item: Paper; openPaper: (id: string) => void;
+  }) {
+    return (
+      <Pressable
+        onPress={() => onOpen(item.id)}
+        style={({ pressed }) => [
+          styles.paperCard,
+          { backgroundColor: t.paper, borderColor: t.border },
+          pressed && { opacity: 0.85 },
+        ]}
+        android_ripple={{ color: `${t.brass}22` }}
+      >
+        <View style={styles.paperHead}>
+          <Text style={[styles.paperTitle, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={[styles.paperQa, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
+            {item.qa === 'q' ? '试 题' : '答 案'}
+          </Text>
+        </View>
+        <Text style={[styles.paperMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
+          {item.province}  ·  {item.volume || '通用'}{item.joint ? '  ·  联考' : ''}
+        </Text>
+      </Pressable>
+    );
+  });
+
   const renderPaper = useCallback(({ item }: { item: Paper }) => (
-    <Pressable
-      onPress={() => openPaper(item.id)}
-      style={({ pressed }) => [
-        styles.paperCard,
-        { backgroundColor: t.paper, borderColor: t.border },
-        pressed && { opacity: 0.85 },
-      ]}
-      android_ripple={{ color: `${t.brass}22` }}
-    >
-      <View style={styles.paperHead}>
-        <Text style={[styles.paperTitle, { color: t.ink, fontFamily: fonts.serif.bold }]} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={[styles.paperQa, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-          {item.qa === 'q' ? '试 题' : '答 案'}
-        </Text>
-      </View>
-      <Text style={[styles.paperMeta, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
-        {item.province}  ·  {item.volume || '通用'}{item.joint ? '  ·  联考' : ''}
-      </Text>
-    </Pressable>
+    <PaperRow item={item} openPaper={openPaper} />
   ), [openPaper, t.paper, t.border, t.ink, t.inkMuted, t.inkFaint, t.brass]);
 
   // Detail view: single question focused

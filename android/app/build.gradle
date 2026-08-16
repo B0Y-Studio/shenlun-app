@@ -75,6 +75,12 @@ android {
             }
         }
     }
+    // 55MB+ 的 index.android.bundle 在 APK 内不压缩（Stored）：解压存储
+    // 每次冷启动要解压 ~42MB（模拟器实测首屏 19s 的主因之一）；不压缩
+    // 允许加载时直接读取。代价是 APK 体积增大。
+    androidResources {
+        noCompress 'bundle'
+    }
     packaging {
         // Don't ship duplicate vector-icon fonts; we use MaterialCommunityIcons only
         jniLibs {
