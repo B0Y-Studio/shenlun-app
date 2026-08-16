@@ -7,7 +7,7 @@
 //   - 当前架构: MainTabs 已切到 React Navigation bottom-tabs（keep-alive，屏不会 unmount）
 //     route.params 变化时屏内 effect 重新拉取数据即可
 //   - 副作用：若外部深链接切换 filter，屏不会重建，靠 presetThemeRef 重 fetch 触发刷新
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -32,40 +32,7 @@ const MODE_OPTIONS: Array<{ key: Mode; label: string }> = [
   { key: 'date',   label: '按 日 期' },
 ];
 
-interface GroupBucket { key: string; count: number; list: Article[] }
-
-function bucketByTheme(articles: Article[]): GroupBucket[] {
-  const map: Record<string, Article[]> = {};
-  for (const a of articles) {
-    const k = a.tags?.[0] || a.chapter || '未分类';
-    (map[k] ||= []).push(a);
-  }
-  return Object.entries(map)
-    .sort((a, b) => b[1].length - a[1].length)
-    .map(([key, list]) => ({ key, count: list.length, list }));
-}
-
-function bucketBySource(articles: Article[]): GroupBucket[] {
-  const map: Record<string, Article[]> = {};
-  for (const a of articles) {
-    const k = a.source || '未署名';
-    (map[k] ||= []).push(a);
-  }
-  return Object.entries(map)
-    .sort((a, b) => b[1].length - a[1].length)
-    .map(([key, list]) => ({ key, count: list.length, list }));
-}
-
-function bucketByDate(articles: Article[]): GroupBucket[] {
-  const map: Record<string, Article[]> = {};
-  for (const a of articles) {
-    const k = a.date || '未知日期';
-    (map[k] ||= []).push(a);
-  }
-  return Object.entries(map)
-    .sort((a, b) => b[0].localeCompare(a[0])) // 日期倒序
-    .map(([key, list]) => ({ key, count: list.length, list }));
-}
+interface GroupBucket { key: string; count: number }
 
 export default function SourceScreen() {
   const { theme } = useTheme();
@@ -92,6 +59,14 @@ export default function SourceScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // 分类 chips 的数据源：接口返回的全量 facets（themes/sources/dates），
+  // 只在"无筛选"的加载（初始 / 切模式）时刷新 —— 选中分类或翻页不动它，
+  // 保证 chips 始终展示全量分类视图，用户可直接切其他分类。
+  // 此前用 bucketBy(articles) 对已加载页客户端分桶：分类列表/计数只反映
+  // 当前 20 条，且 visible 再按 tags[0] 二次过滤与 theme=includes 的
+  // 过滤语义冲突，导致"各分类下只显示 20 个"。
+  const [facets, setFacets] = useState<GroupBucket[]>([]);
+  const [grandTotal, setGrandTotal] = useState(0);
 
   // H1: 已读 id 集合，focus / mount 时从 MMKV 读取。
   // ArticleCard.isRead 接收真实状态（之前硬编码 false，卡片永远"未读"）。
@@ -138,6 +113,12 @@ export default function SourceScreen() {
       setTotal(resp.total);
       setOnline(resp.online);
       setPage(targetPage);
+      // 无筛选的加载（初始 / 切模式）时刷新全量 facets + 总数
+      if (!g) {
+        const f = m === 'theme' ? resp.themes : m === 'source' ? resp.sources : resp.dates;
+        setFacets(f ?? []);
+        setGrandTotal(resp.total);
+      }
       setHasMore(resp.items.length >= 20 && (isReset ? resp.items.length : (articles.length + resp.items.length)) < resp.total);
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
@@ -188,18 +169,12 @@ export default function SourceScreen() {
     fetchPage(undefined, undefined, { nextPage: page + 1 });
   }, [loading, loadingMore, hasMore, page, fetchPage]);
 
-  // 客户端二次分桶（chip 行展示用）
-  const groups = useMemo<GroupBucket[]>(() => {
-    if (mode === 'theme')  return bucketByTheme(articles);
-    if (mode === 'source') return bucketBySource(articles);
-    return bucketByDate(articles);
-  }, [mode, articles]);
+  // 分类 chips：直接用接口全量 facets（见 state 注释），不再客户端分桶
+  const groups = facets;
 
-  const visible = useMemo(() => {
-    if (!activeGroup) return articles;
-    const g = groups.find(g => g.key === activeGroup);
-    return g?.list ?? articles;
-  }, [activeGroup, groups, articles]);
+  // 列表数据：activeGroup 时 articles 已是按分类过滤 + 分页的结果
+  //（服务端/本地都做 theme/source/date 过滤），不做二次筛选
+  const visible = articles;
 
   const onItemPress = useCallback((id: string) => {
     nav.navigate('Reader', { id });
@@ -268,7 +243,7 @@ export default function SourceScreen() {
       {groups.length > 0 ? (
         <View style={styles.chipsRow}>
           <FlatList
-            data={[{ key: '', count: articles.length }, ...groups]}
+            data={[{ key: '', count: grandTotal }, ...groups]}
             keyExtractor={item => item.key || '__all__'}
             horizontal
             showsHorizontalScrollIndicator={false}

@@ -97,12 +97,18 @@ export function localGetArticles(opts: {
   }
 
   // facets 在过滤后的集合上聚合（与服务端语义一致：过滤后可见的分组）
+  // themes：按全部 tags 展开（一篇文章计入它的每个 tag —— 与服务器
+  // list_articles 的聚合一致），并剔除无区分度的元标签：
+  // '时评'/'学习强国'（全量命中）与 'YYYY-MM' 月份标签（date 模式已有）
   const themes: Record<string, number> = {};
   const sources: Record<string, number> = {};
   const dates: Record<string, number> = {};
+  const META_TAG = /^(时评|学习强国|\d{4}-\d{2})$/;
   for (const a of ARTICLES) {
-    const t = a.tags[0] || '未分类';
-    themes[t] = (themes[t] || 0) + 1;
+    for (const tag of a.tags) {
+      if (META_TAG.test(tag)) continue;
+      themes[tag] = (themes[tag] || 0) + 1;
+    }
     sources[a.source || '未署名'] = (sources[a.source || '未署名'] || 0) + 1;
     const m = a.month || a.date.slice(0, 7) || '未知';
     dates[m] = (dates[m] || 0) + 1;
