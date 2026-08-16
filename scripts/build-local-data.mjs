@@ -79,6 +79,42 @@ function cleanAuthor(author) {
   return a;
 }
 
+// 正文样板清理：body_html 转出的文本头部带「标题行 + 来源：X | 日期 | 作者」
+// 尾部带「本文来源：… | URL：…」—— 阅读器已单独渲染 title/meta，这些行
+// 会造成"标题来源显示两遍"。头部循环剥离空行/标题行/来源行；尾部剥
+// 本文来源/URL 行。
+function stripBoilerplate(text, title) {
+  const norm = (s) => s.replace(/\s+/g, '');
+  const tNorm = norm(String(title || ''));
+  const lines = text.split('\n');
+  // 头部
+  let i = 0;
+  while (i < lines.length) {
+    const ln = lines[i].trim();
+    if (!ln) { i++; continue; }
+    const lnN = norm(ln);
+    const isTitleLine = tNorm.length >= 8 && (
+      lnN === tNorm || lnN.startsWith(tNorm) || tNorm.startsWith(lnN)
+    );
+    // 仅匹配「来源：… | 日期：… | 作者：…」组合行，避免误删正文里
+    // 以"来源："开头的普通句子
+    const isMetaLine = /^来源[:：]/.test(ln) && /(日期|作者)/.test(ln);
+    if (isTitleLine || isMetaLine) { i++; continue; }
+    break;
+  }
+  lines.splice(0, i);
+  // 尾部
+  let j = lines.length;
+  while (j > 0) {
+    const ln = lines[j - 1].trim();
+    if (!ln) { j--; continue; }
+    if (/^(本文来源|URL|L)[:：]/.test(ln) || /^https?:\/\//.test(ln)) { j--; continue; }
+    break;
+  }
+  lines.splice(j);
+  return lines.join('\n').trim();
+}
+
 function buildArticles() {
   const contentDir = path.join(BACKUP, 'articles_content');
   const files = fs.readdirSync(contentDir).filter(f => f.endsWith('.json'));
@@ -96,7 +132,7 @@ function buildArticles() {
     const id = d.id || d._id;
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    const content = htmlToText(d.body_html);
+    const content = stripBoilerplate(htmlToText(d.body_html), d.title);
     if (!content) emptyBody += 1;
     items.push({
       id,
