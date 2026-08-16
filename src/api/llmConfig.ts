@@ -1,5 +1,8 @@
 // ShenlunApp/src/api/llmConfig.ts
 import { getDeviceId } from '../storage/mmkv';
+import { isLocalMode } from '../config/dataMode';
+import { getLocalLlmConfig, saveLocalLlmConfig, deleteLocalLlmConfig, getLocalLlmConfigUpdatedAt } from '../llm/llmConfigStore';
+import { testLlmConnectionDirect } from '../llm/client';
 import type { LlmConfig } from '../llm/provider';
 
 import { API_BASE as BASE } from '../config/api';
@@ -14,6 +17,18 @@ export interface RemoteLlmConfig {
 }
 
 export async function fetchLlmConfig(deviceId: string = getDeviceId()): Promise<RemoteLlmConfig> {
+  // 独立模式：读本机 MMKV（Key 不出本机）
+  if (isLocalMode()) {
+    const cfg = getLocalLlmConfig();
+    if (!cfg) return { configured: false };
+    return {
+      configured: true,
+      provider: cfg.provider,
+      baseUrl: cfg.baseUrl,
+      model: cfg.model,
+      updatedAt: getLocalLlmConfigUpdatedAt(),
+    };
+  }
   try {
     const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`);
     if (!r.ok) return { configured: false };
@@ -24,6 +39,11 @@ export async function fetchLlmConfig(deviceId: string = getDeviceId()): Promise<
 }
 
 export async function saveLlmConfig(deviceId: string, cfg: LlmConfig): Promise<boolean> {
+  // 独立模式：写本机 MMKV
+  if (isLocalMode()) {
+    saveLocalLlmConfig(cfg);
+    return true;
+  }
   try {
     const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config`, {
       method: 'POST',
@@ -43,6 +63,11 @@ export async function saveLlmConfig(deviceId: string, cfg: LlmConfig): Promise<b
 }
 
 export async function deleteLlmConfig(deviceId: string = getDeviceId()): Promise<boolean> {
+  // 独立模式：删本机 MMKV
+  if (isLocalMode()) {
+    deleteLocalLlmConfig();
+    return true;
+  }
   try {
     const r = await fetchWithTimeout(`${BASE}/api/judge/llm-config?device_id=${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
     return r.ok;
@@ -97,6 +122,8 @@ export async function deleteJudgeHistoryServer(id: string, deviceId: string = ge
  * "测试连接". Centralizes the BASE URL so future changes don't touch call sites.
  */
 export async function testLlmConnection(deviceId: string = getDeviceId()): Promise<{ ok: boolean; status: number }> {
+  // 独立模式：App 直连厂商（OpenAI 兼容 /chat/completions 非流式最小调用）
+  if (isLocalMode()) return testLlmConnectionDirect();
   try {
     const r = await fetchWithTimeout(`${BASE}/api/judge/run`, {
       method: 'POST',

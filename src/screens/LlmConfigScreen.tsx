@@ -9,6 +9,7 @@ import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { PRESETS, findPreset, type Provider, type LlmConfig } from '../llm/provider';
 import { fetchLlmConfig, saveLlmConfig, deleteLlmConfig, testLlmConnection } from '../api/llmConfig';
 import { getDeviceId } from '../storage/mmkv';
+import { isLocalMode } from '../config/dataMode';
 import type { RootStackParamList } from '../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'LlmConfig'>;
@@ -118,7 +119,9 @@ export default function LlmConfigScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
         <Text style={[styles.h1, { color: t.ink, fontFamily: fonts.serif.bold }]}>AI 评卷 · LLM 配置</Text>
         <Text style={[styles.h2, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-          填入你自己的 Key，App → Server → LLM 厂商。Key 在服务端用 Fernet 加密存储。
+          {isLocalMode()
+            ? '填入你自己的 Key，App 直连 LLM 厂商。Key 仅保存在本机（不经过任何服务器）。'
+            : '填入你自己的 Key，App → Server → LLM 厂商。Key 在服务端用 Fernet 加密存储。'}
         </Text>
 
         <Text style={[styles.label, { color: t.ink, fontFamily: fonts.kai.bold }]}>服务商</Text>

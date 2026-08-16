@@ -103,7 +103,7 @@ export default function SettingsScreen() {
           <Text style={[styles.dataVersion, { color: t.inkFaint, fontFamily: fonts.kai.regular }]}>
             {dataMode === 'local'
               ? `本地数据包：${getLocalDataVersion()}`
-              : '服务器模式：AI 评卷可用；其余内容来自服务端'}
+              : '服务器模式：评卷经服务器代理；其余内容来自服务端'}
           </Text>
         </View>
 
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
             AI 评卷 · LLM 配置
           </Text>
           <Text style={[styles.settingSub, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
-            {dataMode === 'local' ? '需要服务器模式才能使用' : '配置 Key、切换服务商'}
+            {dataMode === 'local' ? '配置 Key（仅存本机，App 直连厂商）' : '配置 Key、切换服务商'}
           </Text>
           <Text style={[styles.arrow, { color: t.brassDeep }]}>›</Text>
         </Pressable>

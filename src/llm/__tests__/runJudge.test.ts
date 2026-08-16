@@ -22,6 +22,16 @@ jest.mock('../../storage/mmkv', () => ({
   getLocalNotes: () => [],
 }));
 
+// === mock 数据源模式 ===
+// 下列三个用例验证的是服务器代理路径的 SSE 行为；强制 server 模式，
+// 避免 isLocalMode()（mmkv mock 后 getStorage 为 null → 默认 local）
+// 把生成器路由到本地直连分支。
+jest.mock('../../config/dataMode', () => ({
+  isLocalMode: () => false,
+  getDataMode: () => 'server',
+  setDataMode: () => {},
+}));
+
 // === helpers ===
 
 const mockQuestion: Question = {
