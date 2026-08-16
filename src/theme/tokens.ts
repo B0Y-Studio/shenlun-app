@@ -208,3 +208,16 @@ export const TAB_ITEMS: TabItem[] = [
   { key: 'analysis', label: '分析' },
   { key: 'settings', label: '设置' },
 ];
+
+// ─────────────────────────────────────────────────────────────
+// 阅读器荧光笔色板（亮/暗主题通用；高亮 span 文字色固定深色保证可读）
+// ─────────────────────────────────────────────────────────────
+export const HIGHLIGHT_COLORS: string[] = [
+  '#FFE066', // 黄
+  '#A8E6A1', // 绿
+  '#91D5FF', // 蓝
+  '#FFB3C6', // 粉
+  '#FFC48C', // 橙
+];
+/** 荧光笔高亮段内的文字色（亮底配深字，暗色模式下同样可读） */
+export const HIGHLIGHT_TEXT_COLOR = '#3D332B';

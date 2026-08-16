@@ -24,6 +24,8 @@ export function mapArticle(card: any): Article {
     source: card.source ?? '',
     author: card.author ?? '',
     norm: card.norm ?? '',
+    // 服务器路径此前丢 tags → 阅读器收藏金句的 theme 字段 undefined
+    tags: card.tags ?? [],
   };
 }
 

@@ -14,7 +14,7 @@ import type {
   PaperListResp, AnalyticsSummary, AnalyticsThemes,
 } from '../api/client';
 import type { Article as LocalArticle } from '../storage/mmkv';
-import { getReadHistory } from '../storage/mmkv';
+import { getReadHistory, setCachedArticles } from '../storage/mmkv';
 
 // ---- 打包数据（构建期内联；类型宽一些，字段以打包脚本产出为准） ----
 import articlesJson from './articles.local.json';
@@ -168,7 +168,11 @@ export function localGetDaily(n = 3): { items: Article[]; online: boolean } {
     const a = pool[(start + i) % pool.length];
     if (!seen.has(a.id)) { seen.add(a.id); picked.push(a); }
   }
-  return { items: picked.map(toFullArticle), online: false };
+  const items = picked.map(toFullArticle);
+  // 与服务端路径对齐：写今日缓存，ReaderScreen 的 cache-first 查找、
+  // "第 X / Y 篇"进度、markReadRemote 元数据都依赖 cached_articles
+  setCachedArticles(items);
+  return { items, online: false };
 }
 
 function addDays(dateStr: string, days: number): string {
