@@ -2,15 +2,21 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, fontSizes, spacing, borders, radii } from '../theme/tokens';
 import { PRESETS, findPreset, type Provider, type LlmConfig } from '../llm/provider';
 import { fetchLlmConfig, saveLlmConfig, deleteLlmConfig, testLlmConnection } from '../api/llmConfig';
 import { getDeviceId } from '../storage/mmkv';
+import type { RootStackParamList } from '../App';
+
+type NavProp = NativeStackNavigationProp<RootStackParamList, 'LlmConfig'>;
 
 export default function LlmConfigScreen() {
   const { theme } = useTheme();
   const t = theme.tokens;
+  const navigation = useNavigation<NavProp>();
   const [provider, setProvider] = useState<Provider>('deepseek');
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com');
   const [model, setModel] = useState('deepseek-chat');
@@ -86,6 +92,13 @@ export default function LlmConfigScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
+        <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+            <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>
+          </Pressable>
+          <Text style={[styles.topTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}>LLM 配置</Text>
+          <View style={{ width: 60 }} />
+        </View>
         <View style={styles.center}>
           <ActivityIndicator color={t.brass} />
         </View>
@@ -95,6 +108,13 @@ export default function LlmConfigScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={[styles.safe, { backgroundColor: t.bg }]}>
+      <View style={[styles.topBar, { borderBottomColor: t.divider }]}>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={[styles.backText, { color: t.ink }]}>← 返回</Text>
+        </Pressable>
+        <Text style={[styles.topTitle, { color: t.ink, fontFamily: fonts.serif.bold }]}>LLM 配置</Text>
+        <View style={{ width: 60 }} />
+      </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
         <Text style={[styles.h1, { color: t.ink, fontFamily: fonts.serif.bold }]}>AI 评卷 · LLM 配置</Text>
         <Text style={[styles.h2, { color: t.inkMuted, fontFamily: fonts.kai.regular }]}>
@@ -177,6 +197,13 @@ export default function LlmConfigScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  topBar: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+  },
+  backText: { fontSize: fontSizes.body, minWidth: 60 },
+  topTitle: { fontSize: fontSizes.subtitle, letterSpacing: 4, flex: 1, textAlign: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   h1: { fontSize: fontSizes.subtitle, letterSpacing: 4, marginBottom: spacing.sm },
   h2: { fontSize: fontSizes.caption, lineHeight: 20, marginBottom: spacing.lg },
